@@ -1,0 +1,123 @@
+from sqlalchemy import BigInteger, Date, ForeignKey, String
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.ext.asyncio import (
+    AsyncAttrs, async_sessionmaker, create_async_engine
+)
+
+
+engine = create_async_engine(url="sqlite+aiosqlite:///db.sqlite3")
+async_session = async_sessionmaker(engine)
+
+
+MAX_STR_LEN = 128
+
+
+class Base(AsyncAttrs, DeclarativeBase):
+    pass
+
+
+class Teacher(Base):
+    __tablename__ = "teachers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    firstname: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+    middlename: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+    lastname: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+    tg_id = mapped_column(BigInteger, nullable=True, unique=True)
+
+
+class Student(Base):
+    __tablename__ = "students"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    firstname: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+    lastname: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+    group: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+    mark_book: Mapped[str] = mapped_column(String(MAX_STR_LEN), unique=True)
+    tg_id = mapped_column(BigInteger, unique=True, nullable=True)
+
+    def __str__(self):
+        return f"{self.lastname} {self.firstname} (группа {self.group})"
+
+
+class HomeworkNozzle(Base):
+    __tablename__ = "homes_nozzle"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    variant: Mapped[int] = mapped_column(unique=True)
+    p0: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+    T0: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+    R: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+    k: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+    d_critic: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+    area_ratio: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+    d_chamber: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+    alpha: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+    beta: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+    rel_propel_mass: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id"), unique=True, nullable=True
+    )
+    deadline: Mapped[Date] = mapped_column(Date, nullable=True)
+    checked: Mapped[bool] = mapped_column(default=False)
+    check_date: Mapped[Date] = mapped_column(Date, nullable=True)
+    send: Mapped[bool] = mapped_column(default=False)
+    done: Mapped[bool] = mapped_column(default=False)
+    done_date: Mapped[Date] = mapped_column(Date, nullable=True)
+    points: Mapped[int] = mapped_column(nullable=True)
+
+    def __str__(self):
+        head = f"Вариант ДЗ - {self.variant}:\n"
+
+        p0 = f"  - давление в камере _p_₀ = {float(self.p0) * 1e-6} МПа;\n"
+        T0 = f"  - температура в камере _T_₀ = {self.T0} К;\n"
+        R = f"  - газовая постоянная _R_ = {self.R} Дж/(кг К);\n"
+        k = f"  - показатель адиабаты _k_ = {self.k};\n"
+        d_critic = f"  - диаметр критического сечения _d_\* = {self.d_critic} м;\n"
+        area_ratio = f"  - отношение площадей выходного и критического сечений ν = {self.area_ratio};\n"
+        d_chamber = f"  - диаметр камеры сгорания _D_ = {self.d_chamber} м;\n"
+        alpha = f"  - угол сужения конфузора α = {self.alpha}°;\n"
+        beta = f"  - угол расширения диффузора β = {self.beta}°;\n"
+        propel_mass = f"  - относительная масса топлива μ = {self.rel_propel_mass}."
+
+        return head + p0 + T0 + R + k + d_critic + area_ratio + \
+            d_chamber + alpha + beta + propel_mass
+
+
+class HomeworkShockWedge(Base):
+    __tablename__ = "homes_shock_wedge"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    variant: Mapped[int] = mapped_column(unique=True)
+    mach: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+    beta1: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+    beta2: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+    beta3: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id"), unique=True, nullable=True
+    )
+    deadline: Mapped[Date] = mapped_column(Date, nullable=True)
+    checked: Mapped[bool] = mapped_column(default=False)
+    check_date: Mapped[Date] = mapped_column(Date, nullable=True)
+    send: Mapped[bool] = mapped_column(default=False)
+    done: Mapped[bool] = mapped_column(default=False)
+    done_date: Mapped[Date] = mapped_column(Date, nullable=True)
+    points: Mapped[int] = mapped_column(nullable=True)
+
+    def __str__(self):
+        text = f"Вариант ДЗ *№{self.variant}*:\n\n"
+
+        mach = f"  - скорость набегающего потока M = {self.mach};\n"
+        beta1 = f"  - угол β₁ = {self.beta1}°;\n"
+        beta2 = f"  - угол β₂ = {self.beta2}°;\n"
+        beta3 = f"  - угол β₃ = {self.beta3}°;\n"
+        k = "  - показатель адиабаты воздуха _k_ = 1.4."
+
+        return text + mach + beta1 + beta2 + beta3 + k
+
+
+async def async_main():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)

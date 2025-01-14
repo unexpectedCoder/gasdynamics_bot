@@ -1,0 +1,16 @@
+{
+    "dirs": {
+        "solutions": "app/files/solutions",
+        "yaml_to_check": "yaml_to_check",
+        "homeworks_to_check": "homeworks_to_check",
+        "checked_homeworks": "checked_homeworks"
+    },
+    "files": {
+        "bot_speech": "app/files/scratches/bot_speech.yml",
+        "example_hw_1": "app/files/scratches/example_hw_1.yml",
+        "students": "app/files/students.json",
+        "home_nozzle": "app/files/home_nozzle.json",
+        "home_shock_wedge": "app/files/home_shock_wedge.json"
+    },
+    "float_eq_accuracy": 4
+}

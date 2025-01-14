@@ -1,0 +1,10 @@
+asyncio
+aiohttp
+aiogram
+magic_filter
+pyyaml
+sqlalchemy
+aiosqlite
+pandas
+openpyxl
+python-dotenv
