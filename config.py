@@ -50,3 +50,7 @@ def get_file(key: str):
 
 def get_answer(handler_name: str):
     return answers.get(handler_name, None)
+
+
+if __name__ == "__main__":
+    init()

@@ -1,3 +1,4 @@
+from enum import Enum
 from sqlalchemy import BigInteger, Date, ForeignKey, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.ext.asyncio import (
@@ -31,13 +32,19 @@ class Student(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     firstname: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+    middlename: Mapped[str] = mapped_column(String(MAX_STR_LEN))
     lastname: Mapped[str] = mapped_column(String(MAX_STR_LEN))
     group: Mapped[str] = mapped_column(String(MAX_STR_LEN))
     mark_book: Mapped[str] = mapped_column(String(MAX_STR_LEN), unique=True)
     tg_id = mapped_column(BigInteger, unique=True, nullable=True)
 
     def __str__(self):
-        return f"{self.lastname} {self.firstname} (группа {self.group})"
+        name = self.get_name()
+        return f"[Студент](tg://user?id={self.tg_id}) " \
+               f"*{self.group} {name}* (зачётка *{self.mark_book}*)"
+    
+    def get_name(self):
+        return f"{self.lastname} {self.firstname} {self.middlename}"
 
 
 class HomeworkNozzle(Base):
@@ -116,6 +123,113 @@ class HomeworkShockWedge(Base):
         k = "  - показатель адиабаты воздуха _k_ = 1.4."
 
         return text + mach + beta1 + beta2 + beta3 + k
+
+
+class Lab_1(Base):
+    __tablename__ = "lab_1"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id"), unique=True, nullable=True
+    )
+    send: Mapped[bool] = mapped_column(default=False)
+    done: Mapped[bool] = mapped_column(default=False)
+    done_date: Mapped[Date] = mapped_column(Date, nullable=True)
+    points: Mapped[int] = mapped_column(nullable=True)
+
+
+class Lab_2(Base):
+    __tablename__ = "lab_2"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id"), unique=True, nullable=True
+    )
+    send: Mapped[bool] = mapped_column(default=False)
+    done: Mapped[bool] = mapped_column(default=False)
+    done_date: Mapped[Date] = mapped_column(Date, nullable=True)
+    points: Mapped[int] = mapped_column(nullable=True)
+
+
+class Lab_3(Base):
+    __tablename__ = "lab_3"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id"), unique=True, nullable=True
+    )
+    send: Mapped[bool] = mapped_column(default=False)
+    done: Mapped[bool] = mapped_column(default=False)
+    done_date: Mapped[Date] = mapped_column(Date, nullable=True)
+    points: Mapped[int] = mapped_column(nullable=True)
+
+
+class Lab_4(Base):
+    __tablename__ = "lab_4"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id"), unique=True, nullable=True
+    )
+    send: Mapped[bool] = mapped_column(default=False)
+    done: Mapped[bool] = mapped_column(default=False)
+    done_date: Mapped[Date] = mapped_column(Date, nullable=True)
+    points: Mapped[int] = mapped_column(nullable=True)
+
+
+class Lab_5(Base):
+    __tablename__ = "lab_5"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id"), unique=True, nullable=True
+    )
+    send: Mapped[bool] = mapped_column(default=False)
+    done: Mapped[bool] = mapped_column(default=False)
+    done_date: Mapped[Date] = mapped_column(Date, nullable=True)
+    points: Mapped[int] = mapped_column(nullable=True)
+
+
+class Lab_6(Base):
+    __tablename__ = "lab_6"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id"), unique=True, nullable=True
+    )
+    send: Mapped[bool] = mapped_column(default=False)
+    done: Mapped[bool] = mapped_column(default=False)
+    done_date: Mapped[Date] = mapped_column(Date, nullable=True)
+    points: Mapped[int] = mapped_column(nullable=True)
+
+
+class Labs(Enum):
+    LAB_1 = 1
+    LAB_2 = 2
+    LAB_3 = 3
+    LAB_4 = 4
+    LAB_5 = 5
+    LAB_6 = 6
+
+
+LABS_TYPES = {
+    Labs.LAB_1.value: Lab_1,
+    Labs.LAB_2.value: Lab_2,
+    Labs.LAB_3.value: Lab_3,
+    Labs.LAB_4.value: Lab_4,
+    Labs.LAB_5.value: Lab_5,
+    Labs.LAB_6.value: Lab_6
+}
+
+
+AnyLab = Lab_1 | Lab_2 | Lab_3 | Lab_4 | Lab_5 | Lab_6
+AnyHomework = HomeworkNozzle | HomeworkShockWedge
 
 
 async def async_main():

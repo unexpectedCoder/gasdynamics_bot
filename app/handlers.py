@@ -1,6 +1,7 @@
 import os
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject, CommandStart
+from aiogram.filters.exception import ExceptionTypeFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import default_state
 from aiogram.types import CallbackQuery, FSInputFile, Message
@@ -10,7 +11,7 @@ import app.inline_keyboards as ikb
 import app.keyboards as kb
 import config as cfg
 from app.registration import router as reg_router
-from app.utils import seasons
+from app.utils.seasons import get_current_semester
 
 
 router = Router()
@@ -22,7 +23,7 @@ async def start_handler(message: Message):
     user_id = message.from_user.id
 
     # Для зареганых преподов
-    teacher = await rq.get_teacher_tg(user_id)
+    teacher = await rq.get_teacher_by_tg(user_id)
     if teacher is not None:
         name = f"{teacher.firstname} {teacher.middlename}"
         await message.answer(
@@ -31,12 +32,10 @@ async def start_handler(message: Message):
         return
     
     # Для зареганых студентов
-    student = await rq.get_student_tg(user_id)
+    student = await rq.get_student_by_tg(user_id)
     if student is not None:
         name = f"{student.firstname} {student.lastname}"
-        await message.answer(
-            f"Приветствую, {name}!", reply_markup=kb.student
-        )
+        await message.answer(f"Приветствую, {name}!", reply_markup=kb.student)
         return
     
     # Если пользователь не зареган
@@ -52,6 +51,16 @@ async def start_handler(message: Message):
 async def check_home_yaml_cancel_no_state(message: Message, state: FSMContext):
     await state.set_data({})
     await message.answer("Нечего отменять")
+
+
+@router.message(Command("deadline"))
+@router.message(F.text.casefold().startswith("дедлайн"))
+async def deadline_handler(message: Message):
+    deadline = await rq.get_homework_deadline(get_current_semester())
+    if deadline:
+        await message.answer(f"Дедлайн ДЗ - *{deadline}*")
+        return
+    await message.answer("Дедлайн ДЗ не установлен")
 
 
 @router.message(Command("homework"))
@@ -73,7 +82,7 @@ async def homework_handler(message: Message, command: CommandObject):
 
 
 async def send_current_homework(message: Message):
-    sem = seasons.get_current_semester()
+    sem = get_current_semester()
     if sem == 1:
         text = "*Домашнее задание весеннего семестра*\n\n"
         await message.answer(text + cfg.get_answer("homework_nozzle"))

@@ -37,7 +37,7 @@ async def reg_handler(message: Message, state: FSMContext):
 async def _check_is_reg_teacher(message: Message):
     user_id = message.from_user.id
     if user_id in cfg.get("teachers"):
-        teacher = await rq.get_teacher_tg(user_id)
+        teacher = await rq.get_teacher_by_tg(user_id)
         name = f"{teacher.firstname} {teacher.middlename}"
         await message.answer(f"{name}, вы уже зарегистрированы")
         return True
@@ -45,7 +45,7 @@ async def _check_is_reg_teacher(message: Message):
 
 
 async def _check_is_reg_student(message: Message):
-    student = await rq.get_student_tg(message.from_user.id)
+    student = await rq.get_student_by_tg(message.from_user.id)
     if student is not None:
         await message.answer(
             f"{student.firstname} {student.lastname}, "
@@ -62,7 +62,7 @@ async def reg_mark_book(message: Message, state: FSMContext):
     data = await state.get_data()
     await state.clear()
 
-    student = await rq.get_student_mark_book(data["mark_book"])
+    student = await rq.get_student_by_mark_book(data["mark_book"])
     if not student:
         await message.answer(
             "Не удалось найти вас в базе данных. "

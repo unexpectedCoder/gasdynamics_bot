@@ -1,9 +1,16 @@
 {
     "dirs": {
-        "solutions": "app/files/solutions",
-        "yaml_to_check": "yaml_to_check",
-        "homeworks_to_check": "homeworks_to_check",
-        "checked_homeworks": "checked_homeworks"
+        "sem_1_solutions": "app/files/sem_1_solutions",
+        "sem_2_solutions": "app/files/sem_2_solutions",
+        "sem_1_yaml_to_check": "sem_1_yaml_to_check",
+        "sem_2_yaml_to_check": "sem_2_yaml_to_check",
+        "sem_1_homeworks_to_check": "sem_1_homeworks_to_check",
+        "sem_1_checked_homeworks": "sem_1_checked_homeworks",
+        "sem_2_homeworks_to_check": "sem_2_homeworks_to_check",
+        "sem_2_checked_homeworks": "sem_2_checked_homeworks",
+        "labs": "labs",
+        "labs_to_check": "labs_to_check",
+        "checked_labs": "checked_labs"
     },
     "files": {
         "bot_speech": "app/files/scratches/bot_speech.yml",

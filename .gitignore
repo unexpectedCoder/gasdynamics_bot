@@ -159,7 +159,10 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-checked_homeworks/
-homeworks_to_check/
-yaml_to_check/
+labs/
+*checked_*/
+*to_check/
 *.xlsx
+*.txt
+
+!requirements.txt

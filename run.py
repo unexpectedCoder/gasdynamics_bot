@@ -11,7 +11,7 @@ import config
 from app.admin import router as admin_router
 from app.database.models import async_main
 from app.handlers import router
-from app.students import router as student_router
+from app.student import router as student_router
 from app.teacher import router as teacher_router
 
 
@@ -47,4 +47,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("Бот выключен")
+        logging.info("Бот выключен")

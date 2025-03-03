@@ -12,4 +12,4 @@ class IsTeacher(BaseFilter):
 
 class IsStudent(BaseFilter):
     async def __call__(self, message: Message):
-        return await rq.get_student_tg(message.from_user.id) is not None
+        return await rq.get_student_by_tg(message.from_user.id) is not None

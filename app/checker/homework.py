@@ -7,12 +7,12 @@ from typing import IO
 import config as cfg
 
 
-def check_solution(file: IO):
+def check_solution(file: IO, sem: int):
     sol = yaml.safe_load(file)
 
     variant = sol["Информация"]["Вариант"]
     sol_fname = os.path.join(
-        cfg.get("dirs")["solutions"], f"{variant}.yml"
+        cfg.get_dir(f"sem_{sem}_solutions"), f"{variant}.yml"
     )
     with open(sol_fname, "r", encoding="utf-8") as sf:
         correct_sol = yaml.safe_load(sf)
