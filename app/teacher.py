@@ -594,7 +594,9 @@ async def _assess_lab_operations(message: Message, data: dict):
             f"**Замечания**\n\n{data['comments']}"
         )
 
-    file_path = os.path.join(cfg.get_dir(f"labs_to_check"), f"{tg_id}.pdf")
+    file_path = os.path.join(
+        cfg.get_dir(f"labs_to_check"), str(data["lab_n"]), f"{tg_id}.pdf"
+    )
     os.remove(file_path)
 
     await message.answer(
@@ -618,11 +620,11 @@ async def assess_lab_approving(message: Message, state: FSMContext):
         await state.clear()
         return
     
-    await state.update_data(points=points)
+    await state.update_data(points=points, date=date.today())
     data = await state.get_data()
     await state.clear()
 
-    _approve_operations_lab(data)
+    await _approve_operations_lab(data)
 
     # Информируем студента
     student_tg = data["student"].tg_id
@@ -640,7 +642,7 @@ async def assess_lab_approving(message: Message, state: FSMContext):
     )
 
 
-def _approve_operations_lab(data: dict):
+async def _approve_operations_lab(data: dict):
     lab_n = data["lab_n"]
     dst = os.path.join(
         cfg.get_dir(f"checked_labs"), str(lab_n)
@@ -649,6 +651,9 @@ def _approve_operations_lab(data: dict):
         os.mkdir(dst)
     except OSError:
         pass
+
+    lab = await rq.get_lab_of(data["student"], lab_n)
+    await rq.assess_lab(data, lab)
 
     src = data["report_path"]
     s = data["student"]
