@@ -77,13 +77,18 @@ class HomeworkNozzle(Base):
     def __str__(self):
         head = f"Вариант ДЗ - {self.variant}:\n"
 
-        p0 = f"  - давление в камере _p_₀ = {float(self.p0) * 1e-6} МПа;\n"
+        p0 = "  - давление в камере " \
+            f"_p_₀ = {round(float(self.p0)*1e-6, 2)} МПа;\n"
         T0 = f"  - температура в камере _T_₀ = {self.T0} К;\n"
         R = f"  - газовая постоянная _R_ = {self.R} Дж/(кг К);\n"
         k = f"  - показатель адиабаты _k_ = {self.k};\n"
-        d_critic = f"  - диаметр критического сечения _d_\* = {self.d_critic} м;\n"
-        area_ratio = f"  - отношение площадей выходного и критического сечений ν = {self.area_ratio};\n"
-        d_chamber = f"  - диаметр камеры сгорания _D_ = {self.d_chamber} м;\n"
+        d_critic = \
+            f"  - диаметр критического сечения _d_\* = {self.d_critic} м;\n"
+        area_ratio = \
+            f"  - отношение площадей выходного и критического сечений " \
+            f"ν = {self.area_ratio};\n"
+        d_chamber = \
+            f"  - диаметр камеры сгорания _D_\_к = {self.d_chamber} м;\n"
         alpha = f"  - угол сужения конфузора α = {self.alpha}°;\n"
         beta = f"  - угол расширения диффузора β = {self.beta}°;\n"
         propel_mass = f"  - относительная масса топлива μ = {self.rel_propel_mass}."

@@ -48,7 +48,7 @@ async def start_handler(message: Message):
 
 
 @router.message(default_state, Command("cancel"))
-async def check_home_yaml_cancel_no_state(message: Message, state: FSMContext):
+async def cancel_no_state(message: Message, state: FSMContext):
     await state.set_data({})
     await message.answer("Нечего отменять")
 
@@ -114,14 +114,8 @@ async def help_yaml_command(message: Message):
     await help_yaml_handler(message)
 
 
-@router.callback_query(F.data == "help_yaml")
-async def help_yaml_callback(cb: CallbackQuery):
-    await help_yaml_handler(cb.message)
-    await cb.answer()
-
-
 async def help_yaml_handler(message: Message):
-    yaml_template_path = cfg.get_file("home_nozzle")
+    yaml_template_path = cfg.get_file("hw_nozzle_template")
     if not os.path.exists(yaml_template_path):
         await message.bot.send_message(
             message.chat.id,
@@ -138,6 +132,12 @@ async def help_yaml_handler(message: Message):
         caption=cfg.get_answer("help_yaml"),
         reply_markup=ikb.help_yaml
     )
+
+
+@router.callback_query(F.data == "help_yaml")
+async def help_yaml_callback(cb: CallbackQuery):
+    await help_yaml_handler(cb.message)
+    await cb.answer()
 
 
 @router.message(Command("help_pyyaml"))

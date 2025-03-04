@@ -4,6 +4,7 @@ from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import default_state
 from aiogram.types import CallbackQuery, FSInputFile, Message
+from aiogram.utils.chat_action import ChatActionMiddleware
 from datetime import date
 
 import app.database.requests as rq
@@ -16,14 +17,13 @@ from app.states import CheckHomeYAML, SendLabReport, SendHomeworkReport
 from app.utils.seasons import get_current_semester
 
 
-# Настройки
 MARK_WRONG = "❌"
 MARK_RIGHT = "✅"
-# -------------------------
 
 
 router = Router()
 router.message.filter(IsStudent())
+router.message.outer_middleware(ChatActionMiddleware())
 
 
 @router.message(F.text.casefold().startswith("получить дз"))
@@ -49,18 +49,33 @@ async def get_homework_handler(message: Message):
 
     await rq.set_homework(student, work)
     await message.answer(
-        f"*Выдано ДЗ*\n\n{str(work)}", reply_markup=ikb.student_hw_deadline
+        f"*Выдано ДЗ*\n\n{str(work)}", reply_markup=ikb.student_get_hw
     )
 
 
+@router.callback_query(F.data == "hw_task")
+async def get_homework_task(cb: CallbackQuery):
+    sem = get_current_semester()
+    ans = "homework_nozzle" if sem == 1 else "homework_shock_wedge"
+    task = cfg.get_answer(ans)
+    await cb.bot.send_message(cb.message.chat.id, task)
+    await cb.answer()
+
+
 @router.callback_query(F.data == "hw_deadline")
-async def get_homework_deadline_callback(cb: CallbackQuery):
+async def get_homework_deadline(cb: CallbackQuery):
     deadline = await rq.get_homework_deadline(get_current_semester())
-    dt = 2
+    chat_id = cb.message.chat.id
+    bot = cb.bot
+
     if not deadline:
-        await cb.answer("Срок сдачи ДЗ пока не установлен", cache_time=dt)
-        return
-    await cb.answer(f"Срок сдачи ДЗ - {deadline}", cache_time=dt)
+        await bot.send_message(
+            chat_id, "Срок сдачи ДЗ пока не установлен"
+        )
+    else:
+        await bot.send_message(
+            chat_id, f"Срок сдачи ДЗ - *{deadline}*")
+    await cb.answer()
 
 
 @router.message(F.text.casefold().startswith("моё дз"))
@@ -77,11 +92,11 @@ async def my_homework_handler(message: Message):
             "или соответствующей клавишей."
         )
         return
-    await message.answer(str(work), reply_markup=ikb.student_hw_deadline)
+    await message.answer(str(work), reply_markup=ikb.student_get_hw)
 
 
 @router.message(Command("my_progress"))
-@router.message(F.text.casefold().startswith("успеваемость"))
+@router.message(F.text.casefold().startswith("моя успеваемость"))
 async def my_progress_handler(message: Message):
     student = await rq.get_student_by_tg(message.from_user.id)
     semesters = [i for i in range(1, get_current_semester() + 1)]
@@ -92,7 +107,7 @@ async def my_progress_handler(message: Message):
     labs = [
         await rq.get_lab_of(student, n)
         for sem in semesters
-        for n in labs_n[sem]
+        for n in labs_n[sem - 1]
     ]
 
     answer = "*Успеваемость*\n\n"
@@ -133,8 +148,14 @@ async def check_homework_handler(message: Message, state: FSMContext):
 
     await state.set_state(CheckHomeYAML.send_yaml)
     await message.answer(
-        "Пожалуйста, пришлите *YAML-файл численного решения* (/cancel):"
+        "Пожалуйста, пришлите *YAML-файл численного решения*:\n/cancel"
     )
+
+
+@router.message(StateFilter(CheckHomeYAML), Command("cancel"))
+async def check_homework_yaml_cancel(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer("Отправка файла отменена")
 
 
 async def _has_not_homework(message: Message, sem: int):
@@ -151,7 +172,7 @@ async def _has_checked_homework(message: Message):
     return work.checked
 
 
-@router.message(CheckHomeYAML.send_yaml)
+@router.message(CheckHomeYAML.send_yaml, F.text != "/cancel")
 async def check_send_yaml_handler(message: Message, state: FSMContext):
     await state.update_data(send_file=message.document)
     data = await state.get_data()
@@ -191,7 +212,16 @@ async def _check_yaml(message: Message, data: dict):
     await message.bot.download(doc, doc_path)
 
     # Сама проверка
-    checked = check(doc_path, sem)
+    try:
+        checked = check(doc_path, sem)
+    except:
+        await message.answer(
+            "Не получилось проверить результаты. "
+            "Пожалуйста, обратитесь к "
+            f"[преподавателю](tg://user?id={os.getenv('OWNER_ID')})"
+        )
+        return
+    
     if not all_right(checked):
         wrongs = "".join([
             f" - {w}\n" for w in whats_wrong(checked)
@@ -212,7 +242,7 @@ async def _check_yaml(message: Message, data: dict):
     await message.answer(
         f"{MARK_RIGHT} Проверка прошла успешно!\n"
         "Теперь вы можете отправить преподавателю на проверку "
-        "*текстовый отчёт в формате PDF* командой /send\_report "
+        "*текстовый отчёт в формате PDF* командой /send\_homework "
         "или соответствующей кнопкой."
     )
 
@@ -231,9 +261,9 @@ async def check_home_yaml_cancel(message: Message, state: FSMContext):
     await message.answer("Действие отменено", reply_markup=kb.student)
 
 
-@router.message(default_state, Command("send_homework"))
 @router.message(default_state, F.text.casefold().startswith("сдать отчёт дз"))
 @router.message(default_state, F.text.casefold().startswith("сдать отчет дз"))
+@router.message(default_state, Command("send_homework"))
 async def send_homework_handler(message: Message, state: FSMContext):
     if await _has_not_homework(message, get_current_semester()):
         await message.answer(
@@ -330,20 +360,32 @@ async def get_lab_handler(message: Message):
     )
 
 
-@router.callback_query(F.data.contains("get_lab"))
+@router.callback_query(F.data.contains("get_lab"),
+                       flags={"chat_action": "upload_document"})
 async def get_lab(cb: CallbackQuery):
     lab_n = int(cb.data[-1])
-    await cb.answer(f"ЛР № {lab_n}")
-
+    path = os.path.join(cfg.get_dir(f"labs"), f"lab_{lab_n}.pdf")
+    doc = FSInputFile(path, f"ЛР {lab_n}.pdf")
+    try:
+        await cb.bot.send_document(
+            cb.message.chat.id, doc, reply_markup=kb.student
+        )
+    except:
+        await cb.answer(
+            "Не найден файл с описанием ЛР. "
+            "Пожалуйста, обратитесь к преподавателю "
+            "или посмотрите задание в гугл-классе",
+            show_alert=True
+        )
+        return
+    
     student = await rq.get_student_by_tg(cb.from_user.id)
     if not await rq.get_lab_of(student, lab_n):
         lab = await rq.get_free_lab(lab_n)
         await rq.set_lab(student, lab)
-
-    path = os.path.join(cfg.get_dir(f"labs"), f"lab_{lab_n}.pdf")
-    doc = FSInputFile(path, f"ЛР {lab_n}.pdf")
-    await cb.bot.send_document(cb.message.chat.id, doc, reply_markup=kb.student)
+    
     await cb.message.delete()
+    await cb.answer(f"ЛР № {lab_n}")
 
 
 @router.message(default_state, F.text.casefold().startswith("сдать отчёт лр"))
@@ -365,12 +407,15 @@ async def choose_lab(message: Message, state: FSMContext):
         await message.answer(
             f"Возможно, вы ещё не получили ЛР № {lab_n}. "
             "Попробуйте получить его командой /get\_lab "
-            "или соответствующей кнопкой"
+            "или соответствующей кнопкой",
+            reply_markup=kb.student
         )
         await state.clear()
         return
     if await _has_done_lab(message, lab_n):
-        await message.answer(f"Вы уже сдали ЛР № {lab_n}")
+        await message.answer(
+            f"Вы уже сдали ЛР № {lab_n}", reply_markup=kb.student
+        )
         await state.clear()
         return
     
@@ -392,7 +437,8 @@ async def send_lab(message: Message, state: FSMContext):
         await message.answer(
             "Некорректный формат файла "
             f"`.{doc.file_name.rsplit('.', maxsplit=1)[-1]}`. "
-            "Требуется PDF-файл."
+            "Требуется PDF-файл",
+            reply_markup=kb.student
         )
         return
     
@@ -417,7 +463,8 @@ async def send_lab(message: Message, state: FSMContext):
     )
     await message.answer(
         "Работа отправлена на проверку "
-        f"[преподавателю](tg://user?id={teacher_tg})"
+        f"[преподавателю](tg://user?id={teacher_tg})",
+        reply_markup=kb.student
     )
 
 

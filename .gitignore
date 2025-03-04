@@ -163,6 +163,8 @@ labs/
 *checked_*/
 *to_check/
 *.xlsx
-*.txt
 
+*.txt
 !requirements.txt
+
+*/students.*

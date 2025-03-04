@@ -14,7 +14,7 @@
     },
     "files": {
         "bot_speech": "app/files/scratches/bot_speech.yml",
-        "example_hw_1": "app/files/scratches/example_hw_1.yml",
+        "hw_nozzle_template": "app/files/scratches/hw_nozzle_template.yml",
         "students": "app/files/students.json",
         "home_nozzle": "app/files/home_nozzle.json",
         "home_shock_wedge": "app/files/home_shock_wedge.json"

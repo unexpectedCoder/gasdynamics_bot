@@ -6,6 +6,7 @@ from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import default_state
 from aiogram.types import CallbackQuery, FSInputFile, Message
+from aiogram.utils.chat_action import ChatActionMiddleware
 from datetime import date, datetime
 from statistics import median
 
@@ -27,6 +28,7 @@ from app.utils.seasons import get_current_semester
 
 router = Router()
 router.message.filter(IsTeacher())
+router.message.outer_middleware(ChatActionMiddleware())
 
 
 @router.message(default_state, F.text.casefold().startswith("добавить студента"))
@@ -426,7 +428,7 @@ async def assess_homework_approving(message: Message, state: FSMContext):
 
     await message.answer(
         "Работа принята. "
-        f"**Информация выслана [студенту](tg://user?id={student_tg})**",
+        f"Информация выслана [студенту](tg://user?id={student_tg})",
         reply_markup=kb.teacher
     )
 
@@ -499,19 +501,19 @@ async def _progress_of_student(message: Message, s: rq.Student, sem: int):
 async def _progress_of_students(message: Message,
                                 students: list[rq.Student],
                                 sem: int):
-    answer = "**Успеваемость**\n\n"
+    answer = "*Успеваемость*\n\n"
 
     for i, s in enumerate(students, start=1):
         answer = answer + f"*{i}. {s}*\n"
         work = await rq.get_homework_of(s, sem)
         if not work:
-            text = f"    ДЗ **не выдано**"
+            text = f"    ДЗ *не выдано*"
         elif work.done:
-            text = f"    ДЗ **сдано** на **{work.points} балл(ов)**\n"
+            text = f"    ДЗ *сдано* на *{work.points} балл(ов)*\n"
         elif work.checked:
-            text = f"    ДЗ **проверено**, но **не сдано**\n"
+            text = f"    ДЗ *проверено*, но *не сдано*\n"
         else:
-            text = f"    ДЗ **не проверено** и **не сдано**\n"
+            text = f"    ДЗ *не проверено* и *не сдано*\n"
         answer = answer + text + "\n"
     
     answer = answer + text + "\n"
@@ -591,7 +593,7 @@ async def _assess_lab_operations(message: Message, data: dict):
             tg_id,
             "Ваша работа проверена "
             f"[преподавателем](tg://user?id={os.getenv('OWNER_ID')}).\n\n"
-            f"**Замечания**\n\n{data['comments']}"
+            f"*Замечания*\n\n{data['comments']}"
         )
 
     file_path = os.path.join(

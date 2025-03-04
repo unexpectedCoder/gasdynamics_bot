@@ -16,9 +16,10 @@ help_yaml = InlineKeyboardMarkup(inline_keyboard=[
     ]
 ])
 
-student_hw_deadline = InlineKeyboardMarkup(inline_keyboard=[
+student_get_hw = InlineKeyboardMarkup(inline_keyboard=[
     [
-        IKB(text="Дедлайн сдачи 💀", callback_data="hw_deadline")
+        IKB(text="Условие задания", callback_data="hw_task"),
+        IKB(text="Дедлайн сдачи", callback_data="hw_deadline")
     ]
 ])
 
