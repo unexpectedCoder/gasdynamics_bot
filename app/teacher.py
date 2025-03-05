@@ -97,7 +97,9 @@ async def delete_student_mark_book(message: Message, state: FSMContext):
         await rq.delete_student(student)
         await message.answer(f"{student} удалён из БД")
         return
-    await message.answer(f"Зачётка `{mark_book}` не найдена в БД")
+    await message.answer(
+        f"Зачётка `{mark_book}` не найдена в БД", reply_markup=kb.teacher
+    )
 
 
 @router.message(StateFilter(DeleteStudent), Command("cancel"))
@@ -115,7 +117,7 @@ async def set_deadline(message: Message, state: FSMContext):
     )
 
 
-@router.message(HomeworkDeadline.set_date)
+@router.message(HomeworkDeadline.set_date, F.text != "/cancel")
 async def set_homework_deadline_date(message: Message, state: FSMContext):
     await state.clear()
 
@@ -127,7 +129,16 @@ async def set_homework_deadline_date(message: Message, state: FSMContext):
         return
 
     await rq.set_homework_deadline(get_current_semester(), deadline)
-    await message.answer(f"Срок сдачи ДЗ установлен: *{deadline}*")
+    await message.answer(
+        f"Срок сдачи ДЗ установлен: *{deadline}*",
+        reply_markup=kb.teacher
+    )
+
+
+@router.message(StateFilter(HomeworkDeadline), Command("cancel"))
+async def set_homework_deadline_cancel(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer("Назначение дедлайна ДЗ отменено")
 
 
 @router.message(F.text.casefold().startswith("студенты"))
@@ -533,6 +544,12 @@ async def assess_lab(cb: CallbackQuery, state: FSMContext):
     dirname = os.path.join(
         cfg.get_dir(f"labs_to_check"), str(lab_n)
     )
+
+    if not os.path.exists(dirname):
+        await cb.message.edit_text(f"Нет непроверенных ЛР № {lab_n}")
+        await state.clear()
+        return
+    
     files = os.listdir(dirname)
     if not files:
         await cb.message.edit_text(f"Нет непроверенных ЛР № {lab_n}")

@@ -7,7 +7,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
 import app.database.requests as rq
-import config
+import config as cfg
 from app.admin import router as admin_router
 from app.database.models import async_main
 from app.handlers import router
@@ -30,20 +30,23 @@ async def main():
     dp.include_routers(
         router, student_router, teacher_router, admin_router
     )
-    dp.startup.register(on_startup)
+
+    # Startup
+    cfg.init()
+    await async_main()
+    if await rq.db_is_empty():
+        await rq.fill_database()
+
     await dp.start_polling(bot)
 
 
-async def on_startup(dispatcher):
-    config.init()
-    flag = not os.path.exists("db.sqlite3")
-    await async_main()
-    if flag:
-        await rq.fill_database()
-
-
 if __name__ == "__main__":
+    from dotenv import load_dotenv
+
+
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+    load_dotenv()
+    
     try:
         asyncio.run(main())
     except KeyboardInterrupt:

@@ -159,13 +159,12 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-vault/
-db_data/
-*.xlsx
+vault
+db_data
 *.key
+*.xlsx
 *.txt
+students.json
 !requirements.txt
-students.*
-files_links.json
 
 secrets

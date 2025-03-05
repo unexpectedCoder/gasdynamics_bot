@@ -33,6 +33,11 @@ def connection(func):
     return inner
 
 
+@connection
+async def db_is_empty(session: AsyncSession):
+    return await session.scalar(select(Student)) is None
+
+
 async def fill_database():
     async with async_session() as session:
         await _init_teachers(session)
@@ -241,9 +246,7 @@ async def get_homework_deadline(session: AsyncSession, sem: int):
 
 @connection
 async def get_teacher_by_tg(session: AsyncSession, tg_id: int):
-    return await session.scalar(
-        select(Teacher).where(Teacher.tg_id == tg_id)
-    )
+    return await session.scalar(select(Teacher).where(Teacher.tg_id == tg_id))
 
 
 @connection

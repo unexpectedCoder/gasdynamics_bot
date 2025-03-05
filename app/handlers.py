@@ -125,13 +125,18 @@ async def help_yaml_handler(message: Message):
         print(yaml_template_path)
         return
     
-    yaml_template = FSInputFile(yaml_template_path)
-    await message.bot.send_document(
+    yaml_file_id = cfg.get_yaml_template_link("homework_nozzle")
+    yaml_file = FSInputFile(yaml_template_path) if not yaml_file_id else None
+
+    msg = await message.bot.send_document(
         message.chat.id,
-        yaml_template,
+        yaml_file if yaml_file else yaml_file_id,
         caption=cfg.get_answer("help_yaml"),
         reply_markup=ikb.help_yaml
     )
+
+    if not yaml_file_id:
+        cfg.set_yaml_template_link("homework_nozzle", msg.document.file_id)
 
 
 @router.callback_query(F.data == "help_yaml")

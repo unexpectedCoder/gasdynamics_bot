@@ -38,7 +38,7 @@ def check_solution(file: IO, sem: int):
 
 
 def _approx_eq(x, y):
-    return abs((x - y) / x) < 1e-3
+    return abs((x - y) / x) < cfg.get("rel_float_eq_accuracy")
 
 
 def all_right(checked: dict):

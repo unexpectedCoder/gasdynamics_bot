@@ -365,10 +365,15 @@ async def get_lab_handler(message: Message):
 async def get_lab(cb: CallbackQuery):
     lab_n = int(cb.data[-1])
     path = os.path.join(cfg.get_dir(f"labs"), f"lab_{lab_n}.pdf")
-    doc = FSInputFile(path, f"ЛР {lab_n}.pdf")
+
+    doc_id = cfg.get_lab_file_link(lab_n)
+    doc = FSInputFile(path, f"ЛР {lab_n}.pdf") if not doc_id else None
+
     try:
-        await cb.bot.send_document(
-            cb.message.chat.id, doc, reply_markup=kb.student
+        msg = await cb.bot.send_document(
+            cb.message.chat.id,
+            doc if doc else doc_id,
+            reply_markup=kb.student
         )
     except:
         await cb.answer(
@@ -378,6 +383,9 @@ async def get_lab(cb: CallbackQuery):
             show_alert=True
         )
         return
+    
+    if not doc_id:
+        cfg.set_lab_file_link(lab_n, msg.document.file_id)
     
     student = await rq.get_student_by_tg(cb.from_user.id)
     if not await rq.get_lab_of(student, lab_n):

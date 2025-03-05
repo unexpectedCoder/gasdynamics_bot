@@ -1,3 +1,4 @@
+import os
 from enum import Enum
 from sqlalchemy import BigInteger, Date, ForeignKey, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -6,7 +7,18 @@ from sqlalchemy.ext.asyncio import (
 )
 
 
-engine = create_async_engine(url="sqlite+aiosqlite:///db.sqlite3")
+db_dir = "db_data"
+if os.getenv("IN_DOCKER"):
+    db_path = os.path.join("/", db_dir, "db.sqlite3")
+else:
+    db_path = os.path.join(db_dir, "db.sqlite3")
+
+try:
+    os.mkdir(os.path.realpath(os.path.join(db_path, os.path.pardir)))
+except OSError:
+    pass
+
+engine = create_async_engine(url=f"sqlite+aiosqlite:///{db_path}")
 async_session = async_sessionmaker(engine)
 
 

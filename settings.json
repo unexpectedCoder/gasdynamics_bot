@@ -2,22 +2,23 @@
     "dirs": {
         "sem_1_solutions": "app/files/sem_1_solutions",
         "sem_2_solutions": "app/files/sem_2_solutions",
-        "sem_1_yaml_to_check": "sem_1_yaml_to_check",
-        "sem_2_yaml_to_check": "sem_2_yaml_to_check",
-        "sem_1_homeworks_to_check": "sem_1_homeworks_to_check",
-        "sem_1_checked_homeworks": "sem_1_checked_homeworks",
-        "sem_2_homeworks_to_check": "sem_2_homeworks_to_check",
-        "sem_2_checked_homeworks": "sem_2_checked_homeworks",
+        "sem_1_yaml_to_check": "/vault/sem_1_yaml_to_check",
+        "sem_2_yaml_to_check": "/vault/sem_2_yaml_to_check",
+        "sem_1_homeworks_to_check": "/vault/sem_1_homeworks_to_check",
+        "sem_1_checked_homeworks": "/vault/sem_1_checked_homeworks",
+        "sem_2_homeworks_to_check": "/vault/sem_2_homeworks_to_check",
+        "sem_2_checked_homeworks": "/vault/sem_2_checked_homeworks",
         "labs": "labs",
-        "labs_to_check": "labs_to_check",
-        "checked_labs": "checked_labs"
+        "labs_to_check": "/vault/labs_to_check",
+        "checked_labs": "/vault/checked_labs"
     },
     "files": {
         "bot_speech": "app/files/scratches/bot_speech.yml",
         "hw_nozzle_template": "app/files/scratches/hw_nozzle_template.yml",
-        "students": "students.json",
         "home_nozzle": "app/files/home_nozzle.json",
-        "home_shock_wedge": "app/files/home_shock_wedge.json"
+        "home_shock_wedge": "app/files/home_shock_wedge.json",
+        "students": "students.json",
+        "files_links": "files_links.json"
     },
-    "float_eq_accuracy": 4
+    "rel_float_eq_accuracy": 0.001
 }
