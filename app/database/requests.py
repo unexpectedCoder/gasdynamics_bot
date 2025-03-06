@@ -25,6 +25,9 @@ from app.database.models import (
 )
 
 
+rand.seed(ddate.today().year)
+
+
 def connection(func):
     @wraps(func)
     async def inner(*args, **kw):
