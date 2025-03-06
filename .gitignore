@@ -160,14 +160,10 @@ cython_debug/
 #.idea/
 
 .vscode
-labs/
-vault/
-db_data/
+secrets
+labs
+vault
+db_data
 *.xlsx
-*.key
 *.txt
 !requirements.txt
-students.*
-files_links.json
-
-secrets

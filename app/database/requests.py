@@ -62,11 +62,13 @@ async def _init_students(session: AsyncSession):
     path = cfg.get_file("students")
     with open(path, "r", encoding="utf-8") as f:
         journal = json.load(f)
+
     for gname, group in journal.items():
         for mark_book in group:
             session.add(Student(
                 group=gname, mark_book=mark_book, **group[mark_book]
             ))
+
     return sum(len(group.keys()) for group in journal.values())
 
 

@@ -45,7 +45,7 @@ if __name__ == "__main__":
 
 
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
-    load_dotenv()
+    load_dotenv(os.path.join("secrets", ".env"))
     
     try:
         asyncio.run(main())

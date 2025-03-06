@@ -1,7 +1,7 @@
 {
     "dirs": {
-        "sem_1_solutions": "app/files/sem_1_solutions",
-        "sem_2_solutions": "app/files/sem_2_solutions",
+        "sem_1_solutions": "secrets/solutions/1",
+        "sem_2_solutions": "secrets/solutions/2",
         "sem_1_yaml_to_check": "/vault/sem_1_yaml_to_check",
         "sem_2_yaml_to_check": "/vault/sem_2_yaml_to_check",
         "sem_1_homeworks_to_check": "/vault/sem_1_homeworks_to_check",
@@ -17,8 +17,8 @@
         "hw_nozzle_template": "app/files/scratches/hw_nozzle_template.yml",
         "home_nozzle": "app/files/home_nozzle.json",
         "home_shock_wedge": "app/files/home_shock_wedge.json",
-        "students": "students.json",
-        "files_links": "files_links.json"
+        "files_links": "files_links.json",
+        "students": "secrets/students.json"
     },
     "rel_float_eq_accuracy": 0.001
 }
