@@ -81,36 +81,6 @@ async def add_student_cancel(message: Message, state: FSMContext):
     await message.answer("Добавление студента отменено")
 
 
-@router.message(default_state, F.text.casefold().startswith("удалить студента"))
-@router.message(default_state, Command("delete_student"))
-async def delete_student_handler(message: Message, state: FSMContext):
-    await state.set_state(DeleteStudent.mark_book)
-    await message.answer("Номер зачётки студента:\n/cancel")
-
-
-@router.message(DeleteStudent.mark_book,
-                lambda m: len(m.text.split()) == 1,
-                F.text != "/cancel")
-async def delete_student_mark_book(message: Message, state: FSMContext):
-    await state.clear()
-
-    mark_book = message.text.upper()
-    student = await rq.get_student_by_mark_book(mark_book)
-    if student:
-        await rq.delete_student(student)
-        await message.answer(f"{student} удалён из БД")
-        return
-    await message.answer(
-        f"Зачётка `{mark_book}` не найдена в БД", reply_markup=kb.teacher
-    )
-
-
-@router.message(StateFilter(DeleteStudent), Command("cancel"))
-async def delete_student_cancel(message: Message, state: FSMContext):
-    await state.clear()
-    await message.answer("Удаление студента отменено")
-
-
 @router.message(default_state, F.text.casefold().startswith("установить дедлайн"))
 @router.message(default_state, Command("set_deadline"))
 async def set_deadline(message: Message, state: FSMContext):

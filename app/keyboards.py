@@ -47,11 +47,10 @@ teacher = ReplyKeyboardMarkup(keyboard=[
         KB(text="Проверить работу 🖍")
     ],
     [
-        KB(text="Добавить студента ➕"),
-        KB(text="Удалить студента ➖")
+        KB(text="Добавить ЛР"),
+        KB(text="Добавить студента ➕")
     ],
     [
-        KB(text="Добавить ЛР"),
         KB(text=about_bot)
     ]
 ], resize_keyboard=True, input_field_placeholder=placeholder)
