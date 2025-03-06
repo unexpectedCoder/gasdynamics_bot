@@ -7,6 +7,11 @@ class AddStudent(StatesGroup):
     mark_book = State()
 
 
+class AddLab(StatesGroup):
+    lab_exists = State()
+    send_file = State()
+
+
 class DeleteStudent(StatesGroup):
     mark_book = State()
 

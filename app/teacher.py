@@ -16,6 +16,7 @@ import app.keyboards as kb
 import config as cfg
 from app.filters import IsTeacher
 from app.states import (
+    AddLab,
     AddStudent,
     AssessHomework,
     AssessLab,
@@ -31,7 +32,8 @@ router.message.filter(IsTeacher())
 router.message.outer_middleware(ChatActionMiddleware())
 
 
-@router.message(default_state, F.text.casefold().startswith("добавить студента"))
+@router.message(default_state,
+                F.text.casefold().startswith("добавить студента"))
 @router.message(default_state, Command("add_student"))
 async def add_student_handler(message: Message, state: FSMContext):
     await state.set_state(AddStudent.name)
@@ -353,7 +355,8 @@ async def assess_homework(cb: CallbackQuery, state: FSMContext):
     )
 
 
-@router.message(AssessHomework.choice, F.text.casefold().startswith("замечания"))
+@router.message(AssessHomework.choice,
+                F.text.casefold().startswith("замечания"))
 async def assess_homework_choice_comments(message: Message, state: FSMContext):
     await state.set_state(AssessHomework.remarking)
     await message.answer(
@@ -685,3 +688,75 @@ async def _approve_operations_lab(data: dict):
 async def assess_lab_cancel(message: Message, state: FSMContext):
     await state.clear()
     await message.answer("Приём ЛР отменён", reply_markup=kb.teacher)
+
+
+@router.message(F.text.casefold().startswith("добавить лр"))
+@router.message(Command("add_lab"))
+async def add_lab_handler(message: Message):
+    await message.answer(
+        "Материал для какой ЛР добавить?", reply_markup=ikb.add_lab
+    )
+
+
+@router.callback_query(default_state, F.data.startswith("add_lab"))
+async def add_lab_callback(cb: CallbackQuery, state: FSMContext):
+    lab_n = int(cb.data[-1])
+    lab_file = f"lab_{lab_n}.pdf"
+    labs_dir = cfg.get_dir("labs")
+
+    if lab_file in os.listdir(labs_dir):
+        await cb.message.edit_text(
+            f"Материалы ЛР № {lab_n} уже есть. Хотите заменить?",
+            reply_markup=ikb.replace_lab
+        )
+        await state.set_state(AddLab.lab_exists)
+    else:
+        await state.set_state(AddLab.send_file)
+        await cb.message.delete()
+        await cb.bot.send_message(
+            cb.message.chat.id,
+            f"Прикрепите PDF-файл ЛР № {lab_n} (до 10 МБ):\n/cancel"
+        )
+    await state.update_data(lab_n=lab_n)
+
+    await cb.answer()
+
+
+@router.callback_query(AddLab.lab_exists, F.data == "replace_lab_yes")
+async def replace_lab(cb: CallbackQuery, state: FSMContext):
+    await state.set_state(AddLab.send_file)
+    await cb.bot.send_message(cb.message.chat.id, "Прикрепите файл:\n/cancel")
+    await cb.answer()
+
+
+@router.callback_query(AddLab.lab_exists, F.data == "replace_lab_no")
+async def replace_lab(cb: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await cb.answer("На нет и суда нет")
+    await cb.message.delete()
+
+
+@router.message(AddLab.send_file, F.document, F.text != "/cancel")
+async def add_lab_send_file(message: Message, state: FSMContext):
+    data = await state.get_data()
+    await state.clear()
+
+    lab_n = data["lab_n"]
+    doc = message.document
+    bot = message.bot
+    if not doc.file_name.casefold().endswith(".pdf"):
+        await message.answer("Требуется PDF-файл (до 10 МБ)")
+        return
+    if doc.file_size > 10485760:
+        await message.answer("Файл слишком большой (> 10 МБ)")
+        return
+    
+    dst = os.path.join(cfg.get_dir("labs"), f"lab_{lab_n}.pdf")
+    doc = await message.bot.download(doc, dst)
+    await message.answer(f"Материал ЛР № {lab_n} сохранён")
+
+
+@router.message(StateFilter(AddLab), Command("cancel"))
+async def add_lab_cancel(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer("Замена ЛР отменена")

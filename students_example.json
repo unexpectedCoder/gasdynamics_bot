@@ -1,0 +1,9 @@
+{
+    "group_id": {
+        "mark_book_id": {
+            "lastname": "Lastname",
+            "firstname": "Firstname",
+            "middlename": "Middlename"
+        }
+    }
+}

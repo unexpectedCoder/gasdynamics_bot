@@ -84,3 +84,23 @@ stats = InlineKeyboardMarkup(inline_keyboard=[
         IKB(text="ДЗ № 2", callback_data="stats_hw_2")
     ]
 ])
+
+add_lab = InlineKeyboardMarkup(inline_keyboard=[
+    [
+        IKB(text="№ 1", callback_data="add_lab_1"),
+        IKB(text="№ 2", callback_data="add_lab_2"),
+        IKB(text="№ 3", callback_data="add_lab_3")
+    ],
+    [
+        IKB(text="№ 4", callback_data="add_lab_4"),
+        IKB(text="№ 5", callback_data="add_lab_5"),
+        IKB(text="№ 6", callback_data="add_lab_6")
+    ]
+])
+
+replace_lab = InlineKeyboardMarkup(inline_keyboard=[
+    [
+        IKB(text="Да", callback_data="replace_lab_yes"),
+        IKB(text="Нет", callback_data="replace_lab_no"),
+    ]
+])

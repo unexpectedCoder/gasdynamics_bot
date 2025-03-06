@@ -8,7 +8,7 @@
         "sem_1_checked_homeworks": "/vault/sem_1_checked_homeworks",
         "sem_2_homeworks_to_check": "/vault/sem_2_homeworks_to_check",
         "sem_2_checked_homeworks": "/vault/sem_2_checked_homeworks",
-        "labs": "labs",
+        "labs": "/labs",
         "labs_to_check": "/vault/labs_to_check",
         "checked_labs": "/vault/checked_labs"
     },
