@@ -1,4 +1,5 @@
 import os
+import yaml
 from aiogram import F, Router
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -12,6 +13,7 @@ import app.inline_keyboards as ikb
 import app.keyboards as kb
 import config as cfg
 from app.checker import all_right, check_solution, whats_wrong
+from app.database.models import Student
 from app.filters import IsStudent
 from app.states import CheckHomeYAML, SendLabReport, SendHomeworkReport
 from app.utils.seasons import get_current_semester
@@ -135,18 +137,24 @@ async def my_progress_handler(message: Message):
 @router.message(default_state, F.text.casefold().startswith("проверить дз"))
 @router.message(default_state, Command("check_homework"))
 async def check_homework_handler(message: Message, state: FSMContext):
-    if await _has_not_homework(message, get_current_semester()):
+    sem = get_current_semester()
+    student = await rq.get_student_by_tg(message.from_user.id)
+    work = await rq.get_homework_of(student, sem)
+
+    if work is None:
         await message.answer(
             "Вы ещё не получили ДЗ. "
             "Попробуйте получить его командой /get\_homework "
             "или соответствующей кнопкой"
         )
         return
-    if await _has_checked_homework(message):
+    
+    if work.checked:
         await message.answer("Ваше численное решение уже проверено")
         return
 
     await state.set_state(CheckHomeYAML.send_yaml)
+    await state.update_data(sem=sem, student=student, work=work)
     await message.answer(
         "Пожалуйста, пришлите *YAML-файл численного решения*:\n/cancel"
     )
@@ -158,21 +166,7 @@ async def check_homework_yaml_cancel(message: Message, state: FSMContext):
     await message.answer("Отправка файла отменена")
 
 
-async def _has_not_homework(message: Message, sem: int):
-    student = await rq.get_student_by_tg(message.from_user.id)
-    work = await rq.get_homework_of(student, sem)
-    return work is None
-
-
-async def _has_checked_homework(message: Message):
-    student = await rq.get_student_by_tg(message.from_user.id)
-    work = await rq.get_homework_of(
-        student, get_current_semester()
-    )
-    return work.checked
-
-
-@router.message(CheckHomeYAML.send_yaml, F.text != "/cancel")
+@router.message(CheckHomeYAML.send_yaml)
 async def check_send_yaml_handler(message: Message, state: FSMContext):
     await state.update_data(send_file=message.document)
     data = await state.get_data()
@@ -180,7 +174,7 @@ async def check_send_yaml_handler(message: Message, state: FSMContext):
 
     if not data["send_file"]:
         await message.answer(
-            "Вы не прикрепили документ. Попробуйте /check_homework ещё раз"
+            "Вы не прикрепили документ. Попробуйте /check\_homework ещё раз"
         )
         return
     
@@ -206,10 +200,25 @@ async def _check_yaml(message: Message, data: dict):
     doc = data["send_file"]
 
     # Скачать и сохранить файл от пользователя
-    sem = get_current_semester()
+    sem = data["sem"]
     doc_dir = cfg.get_dir(f"sem_{sem}_yaml_to_check")
     doc_path = os.path.join(doc_dir, f"{message.from_user.id}.yml")
     await message.bot.download(doc, doc_path)
+
+    # Проверка правильности варианта
+    work = data["work"]
+    correct_variant = work.variant
+    with open(doc_path, "r", encoding="utf-8") as f:
+        yaml_data = yaml.safe_load(f)
+    yaml_variant = yaml_data["Информация"]["Вариант"]
+    if correct_variant != yaml_variant:
+        await message.answer(
+            f"В файле указан вариант № {yaml_variant}, "
+            f"*не совпадающий* с выданным вам вариантом № {correct_variant}. "
+            f"Проверьте командой /my\_homework или соответствующей кнопкой",
+            reply_markup=kb.student
+        )
+        return
 
     # Сама проверка
     try:
@@ -233,10 +242,7 @@ async def _check_yaml(message: Message, data: dict):
         return
     
     # Обновляем БД
-    student = await rq.get_student_by_tg(message.from_user.id)
-    await rq.set_yaml_checked(
-        student, date.today(), get_current_semester()
-    )
+    await rq.set_yaml_checked(data["student"], date.today(), sem)
 
     # Информируем
     await message.answer(
@@ -265,17 +271,23 @@ async def check_home_yaml_cancel(message: Message, state: FSMContext):
 @router.message(default_state, F.text.casefold().startswith("сдать отчет дз"))
 @router.message(default_state, Command("send_homework"))
 async def send_homework_handler(message: Message, state: FSMContext):
-    if await _has_not_homework(message, get_current_semester()):
+    sem = get_current_semester()
+    student = await rq.get_student_by_tg(message.from_user.id)
+    work = await rq.get_homework_of(student, sem)
+
+    if work is None:
         await message.answer(
             "Возможно, вы ещё не получили ДЗ. "
             "Попробуйте получить его командой /get\_homework "
             "или соответствующей кнопкой"
         )
         return
-    if await _has_done_homework(message):
+    
+    if work.done:
         await message.answer("Вы уже сдали ДЗ")
         return
-    if not await _has_checked_homework(message):
+    
+    if not work.checked:
         await message.answer(
             "Численное решение вашего ДЗ ещё не принято, "
             "поэтому пока вы не можете отправить отчёт преподавателю"
@@ -283,17 +295,10 @@ async def send_homework_handler(message: Message, state: FSMContext):
         return
 
     await state.set_state(SendHomeworkReport.send_pdf)
+    await state.update_data(student=student, work=work, sem=sem)
     await message.answer(
         "Пожалуйста, прикрепите *файл отчёта в формате PDF*:\n/cancel"
     )
-
-
-async def _has_done_homework(message: Message):
-    student = await rq.get_student_by_tg(message.from_user.id)
-    work = await rq.get_homework_of(
-        student, get_current_semester()
-    )
-    return work.done
 
 
 @router.message(SendHomeworkReport.send_pdf)
@@ -325,7 +330,7 @@ async def _process_homework_report(message: Message, data: dict):
     doc = data["send_file"]
 
     # Скачиваем и сохраняем отчёт
-    sem = get_current_semester()
+    sem = data["sem"]
     doc_path = os.path.join(
         cfg.get_dir(f"sem_{sem}_homeworks_to_check"),
         f"{message.from_user.id}.pdf"
@@ -333,8 +338,8 @@ async def _process_homework_report(message: Message, data: dict):
     await message.bot.download(doc, doc_path)
 
     # Делаем пометку в БД
-    student = await rq.get_student_by_tg(message.from_user.id)
-    await rq.send_homework(await rq.get_homework_of(student, sem))
+    student = data["student"]
+    await rq.send_homework(data["work"])
 
     # Ответить студенту
     await message.answer(

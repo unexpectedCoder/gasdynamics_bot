@@ -8,7 +8,6 @@ from aiogram.fsm.state import default_state
 from aiogram.types import CallbackQuery, FSInputFile, Message
 from aiogram.utils.chat_action import ChatActionMiddleware
 from datetime import date, datetime
-from statistics import median
 
 import app.database.requests as rq
 import app.inline_keyboards as ikb
@@ -69,7 +68,9 @@ async def add_student_mark_book(message: Message, state: FSMContext):
 
     student, is_new = await rq.add_student(data)
     if is_new:
-        await message.answer(f"{student} добавлен в БД")
+        await message.answer(
+            f"{student} добавлен(а) в БД", reply_markup=kb.teacher
+        )
         return
     await message.answer(f"{student} уже есть в БД")
 
@@ -225,78 +226,6 @@ async def stats_handler(message: Message):
         "Какая статистика вас интересует?",
         reply_markup=ikb.stats
     )
-
-
-@router.callback_query(F.data.contains("stats_hw"))
-async def stats_homework(cb: CallbackQuery):
-    await cb.answer("Статистика по ДЗ")
-
-    sem = int(cb.data.replace("stats_hw_", ""))
-    dirname = cfg.get_dir(f"sem_{sem}_homeworks_to_check")
-    files = os.listdir(dirname)
-
-    reg_students = []
-    for path in files:
-        fname = os.path.basename(os.path.abspath(path))
-        student_tg = int(fname.split(".")[0])
-        reg_students.append(await rq.get_student_by_tg(student_tg))
-    
-    if reg_students == []:
-        await cb.message.edit_text(
-            "Статистика отсутствует: "
-            "пока не зарегистрирован ни один студент",
-            reply_markup=None
-        )
-        return
-
-    reg_groups = sorted({s.group for s in reg_students})
-    reg_journal = {
-        rg: sorted([
-            s for s in reg_students if s.group == rg
-        ], key=lambda x: x.lastname)
-        for rg in reg_groups
-    }
-
-    answer = f"К проверке допущено *{len(reg_students)}* отчётов по ДЗ:\n"
-    for group in reg_journal:
-        answer = answer + f" - *{group}*:\n"
-        for i, s in enumerate(reg_journal[group], start=1):
-            name = f"{s.lastname} {s.firstname}"
-            answer = answer + f"    {i}. {name}\n"
-    answer = answer + "\n"
-    
-    students = list(await rq.get_students())
-    n_students = len(students)
-    works = await rq.get_students_homeworks(sem)
-    if not works:
-        return
-    
-    works = list(await rq.get_students_homeworks(sem))
-    
-    works_text, done_works_text = "", ""
-    n_works = len(works)
-    n_checked_works = len([w for w in works if w.checked])
-    works_text = \
-        f"ДЗ в работе - *{n_works} шт.*, " \
-        f"из из них *{n_checked_works}* прошли проверку на правильность.\n" \
-
-    done_works = [w for w in works if w.done]
-    if done_works:
-        n_done_works = len(done_works)
-        points = [w.points for w in done_works]
-        min_points, max_points = min(points), max(points)
-        median_points = int(median(points))
-        done_works_text = \
-            f"Отчёты приняты по *{n_done_works}* ДЗ. "\
-            f"Максимальный балл - *{max_points}*, " \
-            f"минимальный - *{min_points}*. " \
-            f"Медианный балл - *{median_points}*.\n"
-            
-    answer = answer + \
-        f"Всего {n_students} студентов." + \
-        works_text + done_works_text
-    
-    await cb.bot.send_message(cb.message.chat.id, answer)
 
 
 @router.message(F.text.casefold().startswith("проверить работу"))
