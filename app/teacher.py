@@ -138,14 +138,19 @@ async def students_list(cb: CallbackQuery):
     answer = "*Список студентов*\n"
     for group in students:
         answer = answer + f"\n*{group}*:\n"
+
         for i, s in enumerate(students[group], start=1):
             if not s.tg_id:
-                text = f"  {i}. {s.lastname} {s.firstname}\n"
+                text = f"  {i}. {s.lastname} {s.firstname}"
             else:
                 text = \
                     f"  {i}. [{s.lastname} {s.firstname}]" \
-                    f"(tg://user?id={s.tg_id})\n"
-            answer = answer + text
+                    f"(tg://user?id={s.tg_id})"
+
+            work = await rq.get_homework_of(s, get_current_semester())
+            variant = f" (*вар. № {work.variant}*)" if work else ""
+
+            answer = answer + text + variant + "\n"
 
     await cb.message.edit_text(answer)
     await cb.answer("Список студентов")
@@ -662,36 +667,3 @@ async def add_lab_send_file(message: Message, state: FSMContext):
 async def add_lab_cancel(message: Message, state: FSMContext):
     await state.clear()
     await message.answer("Замена ЛР отменена")
-
-
-@router.message(Command("variants"))
-async def variants_handler(message: Message):
-    students = list(await rq.get_students())
-    groups = sorted({s.group for s in students})
-    students = {
-        g: sorted(
-            [s for s in students if s.group == g],
-            key=lambda x: x.get_name()
-        )
-        for g in groups
-    }
-
-    answer = "*Список вариантов*\n"
-    for group in students:
-        answer = answer + f"\n*{group}*:\n"
-        
-        for i, s in enumerate(students[group], start=1):
-            if not s.tg_id:
-                text = f"  {i}. {s.lastname} {s.firstname}"
-            else:
-                text = \
-                    f"  {i}. [{s.lastname} {s.firstname}]" \
-                    f"(tg://user?id={s.tg_id})"
-                
-            work = await rq.get_homework_of(s, get_current_semester())
-            if work:
-                answer = answer + text + f" - *вар № {work.variant}*" + "\n"
-            else:
-                answer = answer + text + "\n"
-
-    await message.answer(answer)
