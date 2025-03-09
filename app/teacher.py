@@ -244,11 +244,13 @@ async def assess_homework(cb: CallbackQuery, state: FSMContext):
     )
 
     await cb.message.delete()
+
+    name = student.get_name()
     await cb.bot.send_document(
         cb.message.chat.id,
         doc,
-        caption=\
-            "Пожалуйста, проверьте отчёт и выберите действие:"
+        caption=f"Проверьте отчёт ДЗ вра. № {work.variant} "
+            f"(студент {student.group} {name}) и выберите действие:"
             "\n/cancel",
         reply_markup=kb.assess_work_choice
     )
@@ -280,8 +282,9 @@ async def _assess_homework_operations(message: Message, data: dict):
             tg_id,
             data["doc"],
             caption=\
-                "Ваша работа проверена преподавателем. "
-                "Замечания в прикреплённом файле."
+                "Ваша работа проверена "
+                f"[преподавателем](tg://user?id={os.getenv('OWNER_ID')}). "
+                "Замечания в прикреплённом файле"
         )
     else:
         await message.bot.send_message(
@@ -659,3 +662,36 @@ async def add_lab_send_file(message: Message, state: FSMContext):
 async def add_lab_cancel(message: Message, state: FSMContext):
     await state.clear()
     await message.answer("Замена ЛР отменена")
+
+
+@router.message(Command("variants"))
+async def variants_handler(message: Message):
+    students = list(await rq.get_students())
+    groups = sorted({s.group for s in students})
+    students = {
+        g: sorted(
+            [s for s in students if s.group == g],
+            key=lambda x: x.get_name()
+        )
+        for g in groups
+    }
+
+    answer = "*Список вариантов*\n"
+    for group in students:
+        answer = answer + f"\n*{group}*:\n"
+        
+        for i, s in enumerate(students[group], start=1):
+            if not s.tg_id:
+                text = f"  {i}. {s.lastname} {s.firstname}"
+            else:
+                text = \
+                    f"  {i}. [{s.lastname} {s.firstname}]" \
+                    f"(tg://user?id={s.tg_id})"
+                
+            work = await rq.get_homework_of(s, get_current_semester())
+            if work:
+                answer = answer + text + f" - *вар № {work.variant}*" + "\n"
+            else:
+                answer = answer + text + "\n"
+
+    await message.answer(answer)

@@ -338,8 +338,8 @@ async def _process_homework_report(message: Message, data: dict):
     await message.bot.download(doc, doc_path)
 
     # Делаем пометку в БД
-    student = data["student"]
-    await rq.send_homework(data["work"])
+    student, work = data["student"], data["work"]
+    await rq.send_homework(work)
 
     # Ответить студенту
     await message.answer(
@@ -349,10 +349,9 @@ async def _process_homework_report(message: Message, data: dict):
     )
 
     # Маякнуть преподавателю о новом поступлении
-    name = f"{student.group} {student.lastname} {student.firstname}"
     await message.bot.send_message(
         os.getenv("OWNER_ID"),
-        f"Студент группы {name} прислал(а) на проверку *отчёт по ДЗ*."
+        f"{student} прислал(а) на проверку *отчёт по ДЗ* вар. № {work.variant}"
     )
 
 
