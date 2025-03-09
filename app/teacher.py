@@ -134,6 +134,7 @@ async def students_list(cb: CallbackQuery):
         )
         for g in groups
     }
+    sem = get_current_semester()
 
     answer = "*Список студентов*\n"
     for group in students:
@@ -147,7 +148,7 @@ async def students_list(cb: CallbackQuery):
                     f"  {i}. [{s.lastname} {s.firstname}]" \
                     f"(tg://user?id={s.tg_id})"
 
-            work = await rq.get_homework_of(s, get_current_semester())
+            work = await rq.get_homework_of(s, sem)
             variant = f" (*вар. № {work.variant}*)" if work else ""
 
             answer = answer + text + variant + "\n"
