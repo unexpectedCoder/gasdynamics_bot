@@ -16,4 +16,4 @@ COPY . .
 
 ENTRYPOINT [".venv/bin/python", "run.py"]
 
-VOLUME ["/labs", "/vault", "/db_data"]
+VOLUME ["/labs", "/vault", "/db_data", "/logging"]

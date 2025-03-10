@@ -168,3 +168,4 @@ db_data
 *.txt
 !requirements.txt
 README.*
+log

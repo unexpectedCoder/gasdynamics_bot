@@ -12,6 +12,7 @@ run:
 	--mount source=db_data,target=/db_data \
 	--mount source=labs,target=/labs \
 	--mount source=vault,target=/vault \
+	--mount source=logging,target=/logging \
 	--name gasdyn_bot unexpectedcoder/gasdyn_bot_image
 attach:
 	docker attach gasdyn_bot
@@ -29,7 +30,10 @@ rm_vault:
 	docker volume rm vault
 rm_db:
 	docker volume rm db_data
+rm_log:
+	docker volume rm logging
 rm_volumes:
 	docker volume rm labs && \
 	docker volume rm vault && \
-	docker volume rm db_data
+	docker volume rm db_data && \
+	docker volume rm logging
