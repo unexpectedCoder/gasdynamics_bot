@@ -167,5 +167,8 @@ db_data
 *.xlsx
 *.txt
 !requirements.txt
-README.*
 log
+
+README.*
+Makefile
+*example.*
