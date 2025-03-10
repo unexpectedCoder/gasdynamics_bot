@@ -1,7 +1,8 @@
 volumes:
 	docker volume create labs && \
 	docker volume create vault && \
-	docker volume create db_data
+	docker volume create db_data && \
+	docker volume create logging
 build:
 	docker build -t unexpectedcoder/gasdyn_bot_image .
 
