@@ -7,7 +7,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
 import app.database.requests as rq
-import config as cfg
+import config
 from app.admin import router as admin_router
 from app.database.models import async_main
 from app.handlers import router
@@ -32,7 +32,7 @@ async def main():
     )
 
     # Startup
-    cfg.init()
+    config.init()
     await async_main()
     if await rq.db_is_empty():
         await rq.fill_database()
@@ -44,8 +44,25 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
 
 
-    logging.basicConfig(level=logging.INFO, stream=sys.stdout)
     load_dotenv(os.path.join("secrets", ".env"))
+    if os.getenv("IN_DOCKER"):
+        log_file = os.path.join("/logging", "log")
+        logging.basicConfig(
+            level=logging.INFO, filename=log_file, encoding="utf-8"
+        )
+    else:
+        logging.basicConfig(
+            level=logging.INFO, stream=sys.stdout, encoding="utf-8"
+        )
+    
+
+    def handle_exception(exc_type, exc_value, exc_traceback):
+        logging.error(
+            "Exception", exc_info=(exc_type, exc_value, exc_traceback)
+        )
+
+
+    sys.excepthook = handle_exception
     
     try:
         asyncio.run(main())
