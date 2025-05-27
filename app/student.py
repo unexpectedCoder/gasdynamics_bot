@@ -223,6 +223,11 @@ async def _check_yaml(message: Message, data: dict):
     # Сама проверка
     try:
         checked = check(doc_path, sem)
+    except ValueError:
+        await message.answer(
+            "Файл с ответами не соответствует шаблону (см. /help)."
+        )
+        return
     except:
         await message.answer(
             "Не получилось проверить результаты. "

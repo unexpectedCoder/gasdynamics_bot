@@ -16,6 +16,9 @@ def check_solution(file: IO, sem: int):
     )
     with open(sol_fname, "r", encoding="utf-8") as sf:
         correct_sol = yaml.safe_load(sf)
+
+    if not _check_keys(sol, correct_sol):
+        raise ValueError("incorrect solution dict keys")
         
     res = {}
     res["Информация"] = sol["Информация"]
@@ -35,6 +38,19 @@ def check_solution(file: IO, sem: int):
     res["Проверка"]["Результат"] = all_right(res)
     
     return res
+
+
+def _check_keys(sol: dict[dict], correct_sol: dict[dict]):
+    sol_keys = sorted(sol.keys())
+    correct_keys = sorted(correct_sol.keys())
+    if sol_keys == correct_keys:
+        for ck in correct_keys:
+            correct_subkeys = sorted(correct_sol[ck])
+            subkeys = sorted(sol[ck])
+            if subkeys != correct_subkeys:
+                return False
+        return True
+    return False
 
 
 def _approx_eq(x, y):
