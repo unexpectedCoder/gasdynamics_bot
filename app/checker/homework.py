@@ -45,8 +45,8 @@ def _check_keys(sol: dict[dict], correct_sol: dict[dict]):
     correct_keys = sorted(correct_sol.keys())
     if sol_keys == correct_keys:
         for ck in correct_keys:
-            correct_subkeys = sorted(correct_sol[ck])
-            subkeys = sorted(sol[ck])
+            correct_subkeys = sorted(correct_sol[ck].keys())
+            subkeys = sorted(sol[ck].keys())
             if subkeys != correct_subkeys:
                 return False
         return True
