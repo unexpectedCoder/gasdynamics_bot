@@ -12,29 +12,27 @@ class AddLab(StatesGroup):
     send_file = State()
 
 
-class DeleteStudent(StatesGroup):
-    mark_book = State()
-
-
 class AssessHomework(StatesGroup):
-    choice = State()
-    assessment = State()
+    approve_or_remark = State()
     approving = State()
     remarking = State()
 
 
 class AssessLab(StatesGroup):
-    choice = State()
-    assessment = State()
-    approving = State()
-    remarking = State()
+    approve_or_remark = State()
+    approve = State()
+    remark = State()
 
 
-class CheckHomeYAML(StatesGroup):
+class BotCheckHomework(StatesGroup):
     send_yaml = State()
 
 
 class Registration(StatesGroup):
+    mark_book = State()
+
+
+class RemoveStudent(StatesGroup):
     mark_book = State()
 
 
@@ -43,13 +41,8 @@ class SendHomeworkReport(StatesGroup):
 
 
 class SendLabReport(StatesGroup):
-    lab_choice = State()
     send_pdf = State()
 
 
 class HomeworkDeadline(StatesGroup):
-    set_date = State()
-
-
-class ProgressOf(StatesGroup):
-    lastname = State()
+    enter_date = State()

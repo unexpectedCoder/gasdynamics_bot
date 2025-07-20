@@ -52,11 +52,31 @@ class Student(Base):
 
     def __str__(self):
         name = self.get_name()
-        return f"[Студент](tg://user?id={self.tg_id}) " \
-               f"*{self.group} {name}* (зачётка *{self.mark_book}*)"
+        if self.tg_id:
+            return f"{self.group} [{name}](tg://user?id={self.tg_id}) " \
+                "(зачётка {self.mark_book})"
+        return f"{self.group} {name} (зачётка {self.mark_book})"
     
     def get_name(self):
         return f"{self.lastname} {self.firstname} {self.middlename}"
+
+
+class ControlWorks(Base):
+    __tablename__ = "control_works"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    points_1: Mapped[int] = mapped_column(default=0)
+    approved_1: Mapped[bool] = mapped_column(default=False)
+    points_2: Mapped[int] = mapped_column(default=0)
+    approved_2: Mapped[bool] = mapped_column(default=False)
+    points_3: Mapped[int] = mapped_column(default=0)
+    approved_3: Mapped[bool] = mapped_column(default=False)
+    points_4: Mapped[int] = mapped_column(default=0)
+    approved_4: Mapped[bool] = mapped_column(default=False)
+
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id"), unique=True, nullable=True
+    )
 
 
 class HomeworkNozzle(Base):
@@ -79,8 +99,8 @@ class HomeworkNozzle(Base):
         ForeignKey("students.id"), unique=True, nullable=True
     )
     deadline: Mapped[Date] = mapped_column(Date, nullable=True)
-    checked: Mapped[bool] = mapped_column(default=False)
-    check_date: Mapped[Date] = mapped_column(Date, nullable=True)
+    approved: Mapped[bool] = mapped_column(default=False)
+    approve_date: Mapped[Date] = mapped_column(Date, nullable=True)
     send: Mapped[bool] = mapped_column(default=False)
     done: Mapped[bool] = mapped_column(default=False)
     done_date: Mapped[Date] = mapped_column(Date, nullable=True)
@@ -123,8 +143,8 @@ class HomeworkShockWedge(Base):
         ForeignKey("students.id"), unique=True, nullable=True
     )
     deadline: Mapped[Date] = mapped_column(Date, nullable=True)
-    checked: Mapped[bool] = mapped_column(default=False)
-    check_date: Mapped[Date] = mapped_column(Date, nullable=True)
+    approved: Mapped[bool] = mapped_column(default=False)
+    approve_date: Mapped[Date] = mapped_column(Date, nullable=True)
     send: Mapped[bool] = mapped_column(default=False)
     done: Mapped[bool] = mapped_column(default=False)
     done_date: Mapped[Date] = mapped_column(Date, nullable=True)

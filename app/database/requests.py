@@ -11,6 +11,7 @@ from app.database.models import async_session
 from app.database.models import (
     AnyHomework,
     AnyLab,
+    ControlWorks,
     HomeworkNozzle,
     HomeworkShockWedge,
     Lab_1,
@@ -43,15 +44,18 @@ async def db_is_empty(session: AsyncSession):
 
 async def fill_database():
     async with async_session() as session:
-        await _init_teachers(session)
-        n_students = await _init_students(session)
+        _init_teachers(session)
+        _init_students(session)
+        await session.commit()
+        
+        await _init_controls(session)
         await _init_homework_nozzle(session)
         await _init_homework_shock_wedge(session)
-        await _init_labs(session, 2*n_students)
+        await _init_labs(session)
         await session.commit()
 
 
-async def _init_teachers(session: AsyncSession):
+def _init_teachers(session: AsyncSession):
     owner = {
         "firstname": os.getenv("OWNER_FIRSTNAME"),
         "middlename": os.getenv("OWNER_MIDDLENAME"),
@@ -61,46 +65,54 @@ async def _init_teachers(session: AsyncSession):
     session.add(Teacher(**owner))
 
 
-async def _init_students(session: AsyncSession):
+def _init_students(session: AsyncSession):
     path = cfg.get_file("students")
     with open(path, "r", encoding="utf-8") as f:
         journal = json.load(f)
-
     for gname, group in journal.items():
         for mark_book in group:
             session.add(Student(
                 group=gname, mark_book=mark_book, **group[mark_book]
             ))
 
-    return sum(len(group.keys()) for group in journal.values())
+
+async def _init_controls(session: AsyncSession):
+    students = await session.scalars(select(Student))
+    for s in students:
+        session.add(ControlWorks(student_id=s.id))
 
 
 async def _init_homework_nozzle(session: AsyncSession):
     path = cfg.get_file("home_nozzle")
     with open(path, "r") as f:
         variants = _shuffle_variants(json.load(f))
-    for v in variants:
-        session.add(HomeworkNozzle(variant=v, **variants[v]))
+    students = await session.scalars(select(Student))
+    for v, s in zip(variants, students):
+        session.add(HomeworkNozzle(student_id=s.id, variant=v, **variants[v]))
+    
+
+async def _init_homework_shock_wedge(session: AsyncSession):
+    path = cfg.get_file("home_shock_wedge")
+    with open(path, "r") as f:
+        variants = _shuffle_variants(json.load(f))
+    students = await session.scalars(select(Student))
+    for v, s in zip(variants, students):
+        session.add(
+            HomeworkShockWedge(student_id=s.id, variant=v, **variants[v])
+        )
 
 
-async def _init_labs(session: AsyncSession, n: int):
-    for i in range(n):
+async def _init_labs(session: AsyncSession):
+    students = await session.scalars(select(Student))
+    for s in students:
         for lab in (Lab_1, Lab_2, Lab_3, Lab_4, Lab_5, Lab_6):
-            session.add(lab())
+            session.add(lab(student_id=s.id))
 
 
 def _shuffle_variants(variants: dict):
     variants = list(variants.items())
     rand.shuffle(variants)
     return dict(variants)
-
-
-async def _init_homework_shock_wedge(session: AsyncSession):
-    path = cfg.get_file("home_shock_wedge")
-    with open(path, "r") as f:
-        variants = _shuffle_variants(json.load(f))
-    for v in variants:
-        session.add(HomeworkShockWedge(variant=v, **variants[v]))
 
 
 @connection
@@ -175,14 +187,14 @@ async def set_homework_deadline(session: AsyncSession, sem: int, date: ddate):
 
 
 @connection
-async def set_yaml_checked(session: AsyncSession,
+async def approve_homework(session: AsyncSession,
                            student: Student,
                            date: ddate,
                            sem: int):
     HW = _get_semester_hw(sem)
     await session.execute(
         update(HW).where(HW.student_id == student.id).values(
-            check_date=date, checked=True
+            approve_date=date, approved=True
         )
     )
     await session.commit()
@@ -339,3 +351,11 @@ async def get_progress_of(session: AsyncSession, s: Student, sem: int):
         labs[i] = lab.points if lab else None
     
     return hw, labs
+
+
+@connection
+async def update_groups(session: AsyncSession, sem: int):
+    students = await session.scalars(select(Student))
+    for s in students:
+        s.group = s.group[:-2] + ("4" if sem == 1 else "5") + s.group[-1]
+    await session.commit()

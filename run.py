@@ -8,11 +8,10 @@ from aiogram.enums import ParseMode
 
 import app.database.requests as rq
 import config
-from app.admin import router as admin_router
 from app.database.models import async_main
-from app.handlers import router
-from app.student import router as student_router
-from app.teacher import router as teacher_router
+from app.handlers.base import router as base_router
+from app.handlers.student import router as student_router
+from app.handlers.teacher import router as teacher_router
 
 
 async def main():
@@ -28,7 +27,7 @@ async def main():
 
     dp = Dispatcher()
     dp.include_routers(
-        router, student_router, teacher_router, admin_router
+        base_router, student_router, teacher_router
     )
 
     # Startup
@@ -44,6 +43,13 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
 
 
+    def handle_exception(exc_type, exc_value, exc_traceback):
+        logging.error(
+            "Exception", exc_info=(exc_type, exc_value, exc_traceback)
+        )
+
+
+    sys.excepthook = handle_exception
     load_dotenv(os.path.join("secrets", ".env"))
     if os.getenv("IN_DOCKER"):
         log_file = os.path.join("/logging", "log")
@@ -54,15 +60,6 @@ if __name__ == "__main__":
         logging.basicConfig(
             level=logging.INFO, stream=sys.stdout, encoding="utf-8"
         )
-    
-
-    def handle_exception(exc_type, exc_value, exc_traceback):
-        logging.error(
-            "Exception", exc_info=(exc_type, exc_value, exc_traceback)
-        )
-
-
-    sys.excepthook = handle_exception
     
     try:
         asyncio.run(main())
