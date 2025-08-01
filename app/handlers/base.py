@@ -64,62 +64,6 @@ async def keyboard(message: Message):
 
 
 # TODO
-# @router.message(Command("deadline"))
-# @router.message(F.text.casefold().startswith("дедлайн"))
-# async def deadline_handler(message: Message):
-#     deadline = await rq.get_homework_deadline(get_current_semester())
-#     if deadline:
-#         await message.answer(f"Дедлайн ДЗ - *{deadline}*")
-#         return
-#     await message.answer("Дедлайн ДЗ не установлен")
-
-
-# @router.message(Command("homework"))
-# async def homework_handler(message: Message, command: CommandObject):
-#     theme = command.args
-
-#     if not theme:
-#         await send_current_homework(message)
-#         return
-    
-#     text = "*Домашнее задание*"
-#     match theme:
-#         case "nozzle":
-#             await message.answer(text + cfg.get_answer("homework_nozzle"))
-#         case "wedge":
-#             await message.answer(text + cfg.get_answer("homework_shock_wedge"))
-#         case _:
-#             await message.answer("Не знаю такого задания")
-
-
-# async def send_current_homework(message: Message):
-#     sem = get_current_semester()
-#     if sem == 1:
-#         text = "*Домашнее задание весеннего семестра*\n\n"
-#         await message.answer(text + cfg.get_answer("homework_nozzle"))
-#         return
-#     text = "*Домашнее задание осеннего семестра*\n\n"
-#     await message.answer(text + cfg.get_answer("homework_shock_wedge"))
-
-
-# @router.message(F.text.casefold().contains("о боте"))
-# @router.message(Command("help"))
-# async def help_handler(message: Message):
-#     await message.answer(cfg.get_answer("help"))
-
-
-# @router.message(Command("help_teacher"))
-# async def help_teacher_handler(message: Message):
-#     await message.answer(cfg.get_answer("help_teacher"))
-
-
-# @router.message(Command("help_student"))
-# async def help_student_handler(message: Message):
-#     await message.answer(
-#         cfg.get_answer("help_student"), reply_markup=ikb.help
-#     )
-
-
 # @router.message(Command("help_yaml"))
 # async def help_yaml_command(message: Message):
 #     await help_yaml_handler(message)

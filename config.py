@@ -1,6 +1,7 @@
 import json
 import os
 import yaml
+from enum import Enum
 from typing import Any
 
 
@@ -47,6 +48,18 @@ def init():
         "yaml_templates": {
             "homework_nozzle": "",
             "homework_shock_wedge": ""
+        },
+        "word_templates": {
+            "homework": "",
+            "labwork": "",
+            "coursework": ""
+        },
+        "video": {
+            "figures": "",
+            "tables": "",
+            "equations": "",
+            "bibliography": "",
+            "code": ""
         }
     }
 
@@ -71,22 +84,47 @@ def get_answer(handler_name: str):
     return answers.get(handler_name, None)
 
 
-def get_lab_file_link(lab_n: int):
-    return files_links["labs"][str(lab_n)]
+class Lab(Enum):
+    LAB_1 = "labs:1"
+    LAB_2 = "labs:2"
+    LAB_3 = "labs:3"
+    LAB_4 = "labs:4"
+    LAB_5 = "labs:5"
+    LAB_6 = "labs:6"
 
 
-def set_lab_file_link(lab_n: int, link: str):
+class YAMLTemplate(Enum):
+    HW_1 = "yaml_templates:homework_nozzle",
+    HW_2 = "yaml_templates:homework_shock_wedge"
+
+
+class WordTemplate(Enum):
+    HOMEWORK = "word_templates:homework"
+    LABWORK = "word_templates:labwork"
+    COURSEWORK = "word_templates:coursework"
+
+
+class Video(Enum):
+    FIGURES = "video:figures"
+    TABLES = "video:tables"
+    EQUATIONS_WORD = "video:equations_word"
+    EQUATIONS_MATHTYPE = "video:equations_mathtype"
+    BIBLIOGRAPHY = "video:bibliography"
+    CODE = "video:code"
+
+
+AnyConfEnum = Lab | WordTemplate | YAMLTemplate | Video
+
+
+def get_link(tmpl: AnyConfEnum):
+    section, filename = tmpl.value.rsplit(":", maxsplit=1)
+    return files_links[section][filename]
+
+
+def set_link(tmpl: AnyConfEnum, link: str):
     global files_links
-    files_links["labs"][str(lab_n)] = link
-
-
-def get_yaml_template_link(template_name: str):
-    return files_links["yaml_templates"][template_name]
-
-
-def set_yaml_template_link(template_name: str, link: str):
-    global files_links
-    files_links["yaml_templates"][template_name] = link
+    section, filename = tmpl.value.rsplit(":", maxsplit=1)
+    files_links[section][filename] = link
 
 
 if __name__ == "__main__":

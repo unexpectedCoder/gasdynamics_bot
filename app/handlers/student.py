@@ -27,7 +27,7 @@ router.message.filter(IsStudent())
 router.message.outer_middleware(ChatActionMiddleware())
 
 
-@router.message(F.text.casefold().startswith("дз"))
+@router.message(F.text.casefold().startswith("домашнее задание"))
 @router.message(Command("homework"))
 async def homework(message: Message):
     student = await rq.get_student_by_tg(message.from_user.id)
@@ -100,8 +100,10 @@ async def get_homework_deadline(cb: CallbackQuery):
 async def get_homework_results_template(cb: CallbackQuery):
     sem = get_current_semester()
     template_name = \
-        "hw_nozzle_template" if sem == 1 else "hw_shock_wedge_template"
-    yaml_template_path = cfg.get_file(template_name)
+        cfg.YAMLTemplate.HW_1 if sem == 1 else cfg.YAMLTemplate.HW_2
+    yaml_template_path = cfg.get_file(
+        template_name.value.rsplit(":", maxsplit=1)[-1]
+    )
 
     if not os.path.exists(yaml_template_path):
         await cb.answer(
@@ -112,7 +114,7 @@ async def get_homework_results_template(cb: CallbackQuery):
         return
     
     # Trying to find a cached file
-    yaml_file_id = cfg.get_yaml_template_link(template_name)
+    yaml_file_id = cfg.get_link(template_name)
     yaml_file = FSInputFile(yaml_template_path) if not yaml_file_id else None
 
     s = await rq.get_student_by_tg(cb.from_user.id)
@@ -124,7 +126,7 @@ async def get_homework_results_template(cb: CallbackQuery):
         reply_markup=ikb.homework_builder(w.approved)
     )
     if not yaml_file_id:
-        cfg.set_yaml_template_link("homework_nozzle", msg.document.file_id)
+        cfg.set_link(template_name, msg.document.file_id)
     
     await cb.message.delete()
     await cb.answer()
@@ -359,7 +361,7 @@ async def check_home_yaml_cancel(message: Message, state: FSMContext):
     await message.answer("Отправка отчёта отменена", reply_markup=kb.student)
 
 
-@router.message(F.text.casefold().startswith("лр"))
+@router.message(F.text.casefold().startswith("лабораторные работы"))
 @router.message(Command("labwork"))
 async def labs(message: Message):
     sem = get_current_semester()
@@ -380,7 +382,22 @@ async def labs_actions(cb: CallbackQuery):
 async def lab_description(cb: CallbackQuery):
     lab_i = int(cb.data[-1])
     path = os.path.join(cfg.get_dir(f"labs"), f"lab_{lab_i}.pdf")
-    doc_id = cfg.get_lab_file_link(lab_i)
+    if lab_i == 1:
+        lab_enum = cfg.Lab.LAB_1
+    elif lab_i == 2:
+        lab_enum = cfg.Lab.LAB_2
+    elif lab_i == 3:
+        lab_enum = cfg.Lab.LAB_3
+    elif lab_i == 4:
+        lab_enum = cfg.Lab.LAB_4
+    elif lab_i == 5:
+        lab_enum = cfg.Lab.LAB_5
+    elif lab_i == 6:
+        lab_enum = cfg.Lab.LAB_6
+    else:
+        raise ValueError(f"invalid lab work's number {lab_i}")
+    
+    doc_id = cfg.get_link(lab_enum)
     doc = FSInputFile(path, f"ЛР {lab_i}.pdf") if not doc_id else None
 
     try:
@@ -398,14 +415,14 @@ async def lab_description(cb: CallbackQuery):
         return
     
     if not doc_id:
-        cfg.set_lab_file_link(lab_i, msg.document.file_id)
+        cfg.set_link(lab_enum, msg.document.file_id)
     
     s = await rq.get_student_by_tg(cb.from_user.id)
     if not await rq.get_lab_of(s, lab_i):
         await _give_lab(s, lab_i)
     
-    await cb.message.delete()
     await cb.answer()
+    await cb.message.delete()
 
 
 async def _give_lab(student: rq.Student, lab_i: int):
@@ -506,14 +523,22 @@ async def progress(message: Message):
     await message.answer(answer + homeworks_text + labs_text)
 
 
-@router.message(F.text.casefold().startswith("дополнительные материалы"))
-@router.message(Command("materials"))
-async def materials_handler(message: Message):
-    # TODO
-    await message.answer("Пу-пу-пу... Эта функция в разработке")
-    ...
-
-
 @router.message(Command("kb"))
 async def keyboard(message: Message):
     await message.answer("Держите клаву!", reply_markup=kb.student)
+
+
+@router.message(F.text.casefold().startswith("о боте"))
+@router.message(Command("about_bot"))
+async def about_bot(message: Message):
+    await message.answer(
+        "Вы как студент можете:\n"
+        "1. Получать задания ДЗ и лабораторных работ\n",
+        "2. ДЗ предполагает автоматическую проверку ответов ботом. "
+        "После успешной проверки ботом появляется возможность "
+        "отправить отчёт на проверку преподавателем\n"
+        "3. Просматривать свою текущую успеваемость\n"
+        "4. Получать дополнительные материалы "
+        "(видео, шаблоны документов и др.)",
+        reply_markup=kb.student
+    )

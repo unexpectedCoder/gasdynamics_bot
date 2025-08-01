@@ -15,15 +15,10 @@ default_user = ReplyKeyboardMarkup(keyboard=[
 
 student = ReplyKeyboardMarkup(
     keyboard=[
-        [
-            KB(text="Домашка 📕"), KB(text="Лабы 📗")
-        ],
-        [
-            KB(text="Успеваемость 📈"), KB(text="Доп. материалы 📍")
-        ],
-        [
-            KB(text=about_bot)
-        ]
+        [KB(text="Домашнее задание 📕")],
+        [KB(text="Лабораторные работы 📗")],
+        [KB(text="Успеваемость 📈")],
+        [KB(text=about_bot)]
     ],
     resize_keyboard=True,
     input_field_placeholder=placeholder

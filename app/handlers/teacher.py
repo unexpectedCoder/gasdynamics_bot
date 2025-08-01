@@ -654,3 +654,17 @@ async def update_students_groups_sem(cb: CallbackQuery):
 @router.message(Command("kb"))
 async def keyboard(message: Message):
     await message.answer("Держите клаву!", reply_markup=kb.teacher)
+
+
+@router.message(F.text.casefold().startswith("о боте"))
+@router.message(Command("about_bot"))
+async def about_bot(message: Message):
+    await message.answer(
+        "Вы как преподаватель можете:\n"
+        "1. Проверять и/или оценивать контрольные мероприятия "
+        "(РК, ДЗ)\n",
+        "2. Проверять и оценивать отчёты по лабораторным работам\n"
+        "3. Просматривать успеваемость студентов\n"
+        "4. Добавлять/удалять студентов из базы данных",
+        reply_markup=kb.teacher
+    )

@@ -17,6 +17,9 @@ def homework_builder(bot_approved: bool):
                 IKB(text="Дедлайн", callback_data="homework:deadline")
             ],
             [
+                IKB(text="Получить задание", callback_data="homework:get")
+            ],
+            [
                 IKB(text="Шаблон результатов",
                     callback_data="homework:results_template")
             ],
