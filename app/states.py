@@ -46,3 +46,7 @@ class SendLabReport(StatesGroup):
 
 class HomeworkDeadline(StatesGroup):
     enter_date = State()
+
+
+class ControlsChecking(StatesGroup):
+    send_excel = State()

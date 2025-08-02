@@ -62,8 +62,7 @@ def labs_action(lab_i: int):
 examining = InlineKeyboardMarkup(inline_keyboard=[
     [
         IKB(text="ДЗ", callback_data="exam:homework"),
-        IKB(text="РК 1", callback_data="exam:1"),
-        IKB(text="РК 2", callback_data="exam:2")
+        IKB(text="РК", callback_data="exam:rk")
     ]
 ])
 

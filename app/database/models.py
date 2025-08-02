@@ -61,18 +61,28 @@ class Student(Base):
         return f"{self.lastname} {self.firstname} {self.middlename}"
 
 
-class ControlWorks(Base):
-    __tablename__ = "control_works"
+class ControlWorksSem1(Base):
+    __tablename__ = "control_works_sem_1"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    points_1: Mapped[int] = mapped_column(default=0)
     approved_1: Mapped[bool] = mapped_column(default=False)
-    points_2: Mapped[int] = mapped_column(default=0)
+    points_1: Mapped[int] = mapped_column(default=0)
     approved_2: Mapped[bool] = mapped_column(default=False)
-    points_3: Mapped[int] = mapped_column(default=0)
-    approved_3: Mapped[bool] = mapped_column(default=False)
-    points_4: Mapped[int] = mapped_column(default=0)
-    approved_4: Mapped[bool] = mapped_column(default=False)
+    points_2: Mapped[int] = mapped_column(default=0)
+
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id"), unique=True, nullable=True
+    )
+
+
+class ControlWorksSem2(Base):
+    __tablename__ = "control_works_sem_2"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    approved_1: Mapped[bool] = mapped_column(default=False)
+    points_1: Mapped[int] = mapped_column(default=0)
+    approved_2: Mapped[bool] = mapped_column(default=False)
+    points_2: Mapped[int] = mapped_column(default=0)
 
     student_id: Mapped[int] = mapped_column(
         ForeignKey("students.id"), unique=True, nullable=True

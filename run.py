@@ -14,6 +14,9 @@ from app.handlers.student import router as student_router
 from app.handlers.teacher import router as teacher_router
 
 
+# TODO Шаблон файла с ответами
+
+
 async def main():
     token = os.getenv("TOKEN")
     bot = Bot(
@@ -27,7 +30,7 @@ async def main():
 
     dp = Dispatcher()
     dp.include_routers(
-        base_router, student_router, teacher_router
+        student_router, teacher_router, base_router
     )
 
     # Startup

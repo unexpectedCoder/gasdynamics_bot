@@ -11,7 +11,8 @@ from app.database.models import async_session
 from app.database.models import (
     AnyHomework,
     AnyLab,
-    ControlWorks,
+    ControlWorksSem1,
+    ControlWorksSem2,
     HomeworkNozzle,
     HomeworkShockWedge,
     Lab_1,
@@ -79,7 +80,8 @@ def _init_students(session: AsyncSession):
 async def _init_controls(session: AsyncSession):
     students = await session.scalars(select(Student))
     for s in students:
-        session.add(ControlWorks(student_id=s.id))
+        session.add(ControlWorksSem1(student_id=s.id))
+        session.add(ControlWorksSem2(student_id=s.id))
 
 
 async def _init_homework_nozzle(session: AsyncSession):
@@ -272,10 +274,8 @@ async def get_students(session: AsyncSession):
 
 
 @connection
-async def get_students_by_lastname(session: AsyncSession, lname: str):
-    return await session.scalars(
-        select(Student).where(Student.lastname == lname)
-    )
+async def get_student_by_id(session: AsyncSession, id: int):
+    return await session.scalar(select(Student).where(Student.id == id))
 
 
 @connection
@@ -343,14 +343,34 @@ async def delete_student(session: AsyncSession, s: Student):
 async def get_progress_of(session: AsyncSession, s: Student, sem: int):
     hw = await get_homework_of(s, sem)
     hw = hw.points if hw else None
+    
     labs_n = (1, 2, 3) if sem == 1 else (4, 5, 6)
-    labs = [
-        await get_lab_of(s, lab_n) for lab_n in labs_n
-    ]
+    labs = [await get_lab_of(s, lab_n) for lab_n in labs_n]
     for i, lab in enumerate(labs):
         labs[i] = lab.points if lab else None
     
-    return hw, labs
+    controls = await get_controls_of(s, sem)
+    
+    return hw, labs, controls
+
+
+@connection
+async def get_controls_of(session: AsyncSession, s: Student, sem: int):
+    CW = ControlWorksSem1 if sem == 1 else ControlWorksSem2
+    return await session.scalar(select(CW).where(CW.student_id == s.id))
+
+
+@connection
+async def set_control_points_of(session: AsyncSession,
+                                s: Student,
+                                controls: ControlWorksSem1 | ControlWorksSem2):
+    CW = type(controls)
+    await session.execute(
+        update(CW).values(
+            points_1=controls.points_1, points_2=controls.points_2
+        ).where(CW.student_id == s.id)
+    )
+    await session.commit()
 
 
 @connection

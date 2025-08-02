@@ -45,17 +45,14 @@ async def get_homework(cb: CallbackQuery):
     w = await rq.get_homework_of(s, sem)
 
     if w:
-        await cb.answer(
-            f"Вам уже выдан вариант ДЗ № {w.variant}", cache_time=3
-        )
-        await cb.message.delete()
+        await cb.message.edit_text(f"Вам уже выдан вариант ДЗ № {w.variant}")
+        await cb.answer()
         return
     if not w:
-        await cb.answer(
-            "Домашних заданий не осталось, обратитесь к преподавателю",
-            show_alert=True
+        await cb.message.edit_text(
+            "Домашних заданий не осталось, обратитесь к преподавателю"
         )
-        await cb.message.delete()
+        await cb.answer()
         return
 
     await rq.set_homework(s, w)
@@ -90,10 +87,11 @@ async def get_homework_description(cb: CallbackQuery):
 async def get_homework_deadline(cb: CallbackQuery):
     deadline = await rq.get_homework_deadline(get_current_semester())
     if not deadline:
-        await cb.answer("Срок сдачи ДЗ не установлен", cache_time=3)
+        text = "Срок сдачи ДЗ не установлен"
     else:
-        await cb.answer(f"Срок сдачи ДЗ - {rus_date(deadline)}", cache_time=5)
-    await cb.message.delete()
+        text = f"Срок сдачи ДЗ - {rus_date(deadline)}"
+    await cb.message.edit_text(text)
+    await cb.answer()
 
 
 @router.callback_query(F.data == "homework:results_template")
@@ -106,11 +104,10 @@ async def get_homework_results_template(cb: CallbackQuery):
     )
 
     if not os.path.exists(yaml_template_path):
-        await cb.answer(
-            "Не найден шаблон YAML-файла решения. Обратитесь к преподавателю",
-            show_alert=True
+        await cb.message.edit_text(
+            "Не найден шаблон YAML-файла решения. Обратитесь к преподавателю"
         )
-        await cb.message.delete()
+        await cb.answer()
         return
     
     # Trying to find a cached file
@@ -141,16 +138,12 @@ async def get_homework_mark(cb: CallbackQuery):
     points = w.points
 
     if points is None:
-        await cb.answer(
-            "Оценка вашему ДЗ не выставлена", show_alert=True
-        )
-        return
+        await cb.message.edit_text("Оценка вашему ДЗ не выставлена")
     else:
-        await cb.answer(
-            f"Оценка за ДЗ - {w.points} баллов (дата: {done_date})",
-            cache_time=5
+        await cb.message.edit_text(
+            f"Оценка за ДЗ - {w.points} баллов (дата: {done_date})"
         )
-    await cb.message.delete()
+    await cb.answer()
 
 
 @router.callback_query(F.data == "homework:algo")
@@ -167,8 +160,8 @@ async def homework_algo(cb: CallbackQuery):
         "выставляя оценку. Замечания исправляете, высылаете работу вновь\n" \
         "5. Profit"
     await cb.bot.send_message(cb.message.chat.id, text)
-    await cb.message.delete()
     await cb.answer()
+    await cb.message.delete()
 
 
 @router.callback_query(F.data == "homework:bot_check", default_state)
@@ -178,16 +171,15 @@ async def homework_bot_check(cb: CallbackQuery, state: FSMContext):
     work = await rq.get_homework_of(student, sem)
 
     if work is None:
-        await cb.answer(
+        await cb.message.edit_text(
             "Вы ещё не получили ДЗ. "
-            "Получите его через кнопку (команду) 'ДЗ'",
-            show_alert=True
+            "Получите его через кнопку (команду) 'Домашнее задание'"
         )
-        await cb.message.delete()
+        await cb.answer()
         return
     if work.approved:
-        await cb.answer("Ваше решение уже прошло проверку ботом", cache_time=2)
-        await cb.message.delete()
+        await cb.message.edit_text("Ваше решение уже прошло проверку ботом")
+        await cb.answer()
         return
 
     await state.set_state(BotCheckHomework.send_yaml)
@@ -196,8 +188,8 @@ async def homework_bot_check(cb: CallbackQuery, state: FSMContext):
         cb.message.chat.id, "Прикрепите YAML-файл с ответами >>>\n/cancel"
     )
 
-    await cb.message.delete()
     await cb.answer()
+    await cb.message.delete()
 
 
 @router.message(BotCheckHomework.send_yaml)
@@ -296,14 +288,12 @@ async def send_homework_report(cb: CallbackQuery, state: FSMContext):
     w = await rq.get_homework_of(s, sem)
 
     if w is None:
-        await cb.answer(
-            "Вы ещё не получили (не взяли) ДЗ", show_alert=True
-        )
-        await cb.message.delete()
+        await cb.message.edit_text("Вы ещё не получили (не взяли) ДЗ")
+        await cb.answer()
         return
     if w.done:
-        await cb.answer("Вы уже сдали ДЗ", cache_time=2)
-        await cb.message.delete()
+        await cb.message.edit_text("Вы уже сдали ДЗ")
+        await cb.answer()
         return
 
     await state.set_state(SendHomeworkReport.send_pdf)
@@ -407,11 +397,11 @@ async def lab_description(cb: CallbackQuery):
             caption=f"Описание ЛР № {lab_i}"
         )
     except:
-        await cb.answer(
+        await cb.message.edit_text(
             "Не найден файл с описанием ЛР. "
-            "Обратитесь к преподавателю или посмотрите задание в гугл-классе",
-            show_alert=True
+            "Обратитесь к преподавателю или посмотрите задание в гугл-классе"
         )
+        await cb.answer()
         return
     
     if not doc_id:
@@ -438,8 +428,8 @@ async def send_lab(cb: CallbackQuery, state: FSMContext):
     await cb.bot.send_message(
         cb.message.chat.id, "Прикрепите PDF-файл >>>\n/cancel"
     )
-    await cb.message.delete()
     await cb.answer()
+    await cb.message.delete()
 
 
 @router.message(SendLabReport.send_pdf, F.document)

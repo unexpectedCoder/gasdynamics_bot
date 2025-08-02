@@ -20,6 +20,7 @@ from app.states import (
     AddStudent,
     AssessHomework,
     AssessLab,
+    ControlsChecking,
     HomeworkDeadline,
     RemoveStudent
 )
@@ -62,10 +63,8 @@ async def check_homework(cb: CallbackQuery, state: FSMContext):
     files = os.listdir(dirname)
     if not files:
         await state.clear()
-        await cb.answer(
-            f"Нет непроверенных ДЗ за {sem}-й семестр", cache_time=3
-        )
-        await cb.message.delete()
+        await cb.message.edit_text(f"Нет непроверенных ДЗ за {sem}-й семестр")
+        await cb.answer()
         return
     
     f = files[0]
@@ -234,11 +233,73 @@ async def set_homework_deadline_cancel(message: Message, state: FSMContext):
     await message.answer("Назначение дедлайна ДЗ отменено")
 
 
-@router.callback_query(F.data.regexp(r"^exam:\d$"))
-async def exam_controlling(cb: CallbackQuery):
-    control_i = int(cb.data[-1])
-    # TODO
-    await cb.answer("Упс... Пока не реализовано :(", show_alert=True)
+@router.callback_query(F.data == "exam:rk", default_state)
+async def exam_controlling(cb: CallbackQuery, state: FSMContext):
+    sem = get_current_semester()
+    students = list(await rq.get_students())
+    controls = [await rq.get_controls_of(s, sem) for s in students]
+    groups = [s.group for s in students]
+
+    progress = pd.DataFrame({
+        "ФИО": [s.get_name() for s in students],
+        "Группа": groups,
+        "РК 1": list(map(lambda c: c.points_1, controls)),
+        "РК 2": list(map(lambda c: c.points_2, controls))
+    }).sort_values(by=["Группа", "ФИО"])
+    
+    excel_path = f"controls.xlsx"
+    progress.to_excel(excel_path, index=False)
+    doc = FSInputFile(excel_path)
+
+    await cb.bot.send_document(
+        cb.message.chat.id,
+        doc,
+        caption="Проставьте РК в присланном файле и пришлите его обратно >>>\n"
+                "/cancel"
+    )
+
+    await state.set_state(ControlsChecking.send_excel)
+
+    await cb.message.delete()
+    await cb.answer()
+
+
+@router.message(F.document, ControlsChecking.send_excel)
+async def send_controls_excel(message: Message, state: FSMContext):
+    await state.clear()
+
+    doc = message.document
+    doc_format = doc.file_name.rsplit(".", maxsplit=1)[-1].lower()
+    formats = ["xls", "xlsx", "xlsm", "xlsb", "odf", "ods", "odt"]
+    if doc_format not in formats:
+        await message.answer(
+            "Не тот формат файла. "
+            f"Допустимы следующие форматы: {', '.join(formats)}"
+        )
+        return
+    
+    timestamp = datetime.today().strftime(r'%d-%m-%Y-%H-%M')
+    dst = os.path.join(
+        cfg.get_dir("controls"), f"controls_{timestamp}.{doc_format}"
+    )
+    await message.bot.download(doc, dst)
+    excel = pd.read_excel(dst)
+    sem = get_current_semester()
+    for id, row in excel.iterrows():
+        student = await rq.get_student_by_id(id + 1)
+        controls = await rq.get_controls_of(student, sem)
+        controls.points_1 = row["РК 1"]
+        controls.points_2 = row["РК 2"]
+        await rq.set_control_points_of(student, controls)
+    
+    os.remove(dst)
+    await message.answer("Успеваемость студентов обновлена")
+
+
+@router.message(Command("cancel"), StateFilter(ControlsChecking))
+async def cancel_controls_checking(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer("Проверка РК отменена")
 
 
 @router.message(F.text.casefold().startswith("лабораторные работы"))
@@ -264,8 +325,8 @@ async def check_lab(cb: CallbackQuery, state: FSMContext):
     
     if not os.path.exists(dirname) or not os.listdir(dirname):
         await state.clear()
-        await cb.answer(f"Нет непроверенных ЛР № {lab_n}", cache_time=2)
-        await cb.message.delete()
+        await cb.message.edit_text(f"Нет непроверенных ЛР № {lab_n}")
+        await cb.answer()
         return
     
     f = rand_choice(os.listdir(dirname))
@@ -285,8 +346,8 @@ async def check_lab(cb: CallbackQuery, state: FSMContext):
         caption="Проверьте отчёт и выберите действие >>>\n/cancel",
         reply_markup=ikb.labs_approve_or_remark
     )
+
     await cb.message.delete()
-    
     await cb.answer()
 
 
@@ -447,8 +508,8 @@ async def send_lab_pdf(message: Message, state: FSMContext):
 @router.callback_query(F.data == "labs:not_replace", AddLab.lab_exists)
 async def replace_lab(cb: CallbackQuery, state: FSMContext):
     await state.clear()
-    await cb.answer("На нет и суда нет")
-    await cb.message.delete()
+    await cb.message.edit_text("На нет и суда нет")
+    await cb.answer()
 
 
 @router.message(StateFilter(AddLab), Command("cancel"))
@@ -467,22 +528,22 @@ async def students(message: Message):
 
 @router.callback_query(F.data == "students:progress")
 async def students_progress(cb: CallbackQuery):
-    await cb.message.delete()
-
     students = list(await rq.get_students())
     sem = get_current_semester()
-    points = [await rq.get_progress_of(s, sem) for s in students]
-    names = [s.get_name() for s in students]
-    homeworks = [hw for hw, _ in points]
+    progresses = [await rq.get_progress_of(s, sem) for s in students]
+    homeworks = list(map(lambda p: p[0], progresses))
     labs = [
-        [labs[i-1] for _, labs in points]
-        for i in ((1, 2, 3) if sem == 1 else (4, 5, 6))
+        list(map(lambda p: p[1][i], progresses))
+        for i in (range(3) if sem == 1 else range(3, 6))
     ]
+    controls = list(map(lambda p: p[2], progresses))
     groups = [s.group for s in students]
 
     progress = pd.DataFrame({
-        "ФИО": names,
+        "ФИО": [s.get_name() for s in students],
         "Группа": groups,
+        "РК 1": list(map(lambda c: c.points_1, controls)),
+        "РК 2": list(map(lambda c: c.points_2, controls)),
         "ДЗ": homeworks,
         "ЛР № 1": labs[0],
         "ЛР № 2": labs[1],
@@ -496,6 +557,7 @@ async def students_progress(cb: CallbackQuery):
         cb.message.chat.id, doc, caption="Успеваемость студентов"
     )
 
+    await cb.message.delete()
     await cb.answer()
 
 
@@ -647,8 +709,8 @@ async def update_students_groups(cb: CallbackQuery):
 @router.callback_query(F.data.startswith("students:sem_"))
 async def update_students_groups_sem(cb: CallbackQuery):
     await rq.update_groups(int(cb.data[-1]))
-    await cb.answer("Обозначение учебных групп обновлено", cache_time=2)
-    await cb.message.delete()
+    await cb.message.edit_text("Обозначение учебных групп обновлено")
+    await cb.answer()
 
 
 @router.message(Command("kb"))

@@ -60,7 +60,7 @@ async def about_bot_handler(message: Message):
 
 @router.message(Command("kb"))
 async def keyboard(message: Message):
-    await message.answer("Держите клаву!", kb.default_user)
+    await message.answer("Держите клаву!", reply_markup=kb.default_user)
 
 
 # TODO

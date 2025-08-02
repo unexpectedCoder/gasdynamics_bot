@@ -10,7 +10,8 @@
         "sem_2_checked_homeworks": "/vault/sem_2_checked_homeworks",
         "labs": "/labs",
         "labs_to_check": "/vault/labs_to_check",
-        "checked_labs": "/vault/checked_labs"
+        "checked_labs": "/vault/checked_labs",
+        "controls": "/vault/controls"
     },
     "files": {
         "bot_speech": "app/files/scratches/bot_speech.yml",
