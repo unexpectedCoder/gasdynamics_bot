@@ -46,7 +46,9 @@ def init():
             "6": ""
         },
         "yaml_templates": {
-            "homework_nozzle": "",
+            "homework_nozzle": ""
+        },
+        "json_templates": {
             "homework_shock_wedge": ""
         },
         "word_templates": {

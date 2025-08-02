@@ -86,7 +86,7 @@ async def check_homework(cb: CallbackQuery, state: FSMContext):
         cb.message.chat.id,
         doc,
         caption=f"Проверьте ДЗ вар. № {hw.variant} "
-            f"(выполнил {name}, {s.group}) и выберите действие 👇"
+            f"(выполнил(а) {name}, {s.group}) и выберите действие 👇"
             "\n/cancel",
         reply_markup=ikb.homework_approve_or_remark
     )
@@ -98,19 +98,20 @@ async def check_homework(cb: CallbackQuery, state: FSMContext):
                        AssessHomework.approve_or_remark)
 async def remark_homework(cb: CallbackQuery, state: FSMContext):
     await state.set_state(AssessHomework.remarking)
-    await cb.message.edit_text(
+    await cb.bot.send_message(
+        cb.message.chat.id,
         "Напишите замечания или прикрепите файл с ними >>>\n\n"
-        "_это сообщение будет переслано студенту_\n:"
+        "_это сообщение будет переслано студенту_\n"
         "/cancel"
     )
     await cb.answer()
+    await cb.message.delete()
 
 
-@router.message(AssessHomework.remarking)
+@router.message(AssessHomework.remarking, F.text != "/cancel")
 async def send_homework_remarks(message: Message, state: FSMContext):
     await state.update_data(remarks=message.text, doc=message.document)
     data = await state.get_data()
-    await state.clear()
     
     tg_id = data["student"].tg_id
     if data["doc"]:
@@ -124,7 +125,7 @@ async def send_homework_remarks(message: Message, state: FSMContext):
         await message.bot.send_message(
             tg_id,
             "Ваша работа проверена преподавателем.\n"
-            f"Замечания:\n\n{data['remarks']}"
+            f"Замечания 👇\n\n{data['remarks']}"
         )
 
     sem = data["sem"]
@@ -133,9 +134,8 @@ async def send_homework_remarks(message: Message, state: FSMContext):
     )
     os.remove(file_path)
 
-    await message.answer(
-        f"Замечания высланы [студенту](tg://user?id={tg_id})"
-    )
+    await message.answer("Замечания высланы студенту")
+    await state.clear()
 
 
 @router.callback_query(F.data == "homework:approve",
@@ -145,17 +145,20 @@ async def approve_homework(cb: CallbackQuery, state: FSMContext):
 
     deadline = data["homework"].deadline
     if deadline and date.today() > deadline:
-        await cb.message.edit_text(
+        await cb.bot.send_message(
+            cb.message.chat.id,
             "Оцените работу (сдана с опозданием) >>>\n/cancel"
         )
     else:
-        await cb.message.edit_text("Оцените работу >>>\n/cancel")
+        await cb.bot.send_message(
+            cb.message.chat.id, "Оцените работу >>>\n/cancel"
+        )
     
     await state.set_state(AssessHomework.approving)
     await cb.answer()
 
 
-@router.message(AssessHomework.approving)
+@router.message(AssessHomework.approving, F.text != "/cancel")
 async def assess_homework(message: Message, state: FSMContext):
     points: str = message.text
     if not points.isdigit() or int(points) < 0:
@@ -165,7 +168,6 @@ async def assess_homework(message: Message, state: FSMContext):
     
     await state.update_data(points=points)
     data = await state.get_data()
-    await state.clear()
 
     data["date"] = date.today()
     sem = get_current_semester()
@@ -188,14 +190,13 @@ async def assess_homework(message: Message, state: FSMContext):
 
     student_tg = data["student"].tg_id
     await message.bot.send_message(
-        student_tg,
-        f"Ваше ДЗ принято преподавателем: оценка - {data['points']}"
+        student_tg, f"Ваше ДЗ принято преподавателем: оценка - {data['points']}"
     )
     await message.answer(
-        "Работа принята, "
-        f"информация выслана [студенту](tg://user?id={student_tg})",
-        reply_markup=kb.teacher
+        "Работа принята, информация выслана студенту", reply_markup=kb.teacher
     )
+
+    await state.clear()
 
 
 @router.message(StateFilter(AssessHomework), Command("cancel"))
@@ -241,6 +242,7 @@ async def exam_controlling(cb: CallbackQuery, state: FSMContext):
     groups = [s.group for s in students]
 
     progress = pd.DataFrame({
+        "id": [s.id for s in students],
         "ФИО": [s.get_name() for s in students],
         "Группа": groups,
         "РК 1": list(map(lambda c: c.points_1, controls)),
@@ -285,8 +287,8 @@ async def send_controls_excel(message: Message, state: FSMContext):
     await message.bot.download(doc, dst)
     excel = pd.read_excel(dst)
     sem = get_current_semester()
-    for id, row in excel.iterrows():
-        student = await rq.get_student_by_id(id + 1)
+    for _, row in excel.iterrows():
+        student = await rq.get_student_by_id(row["id"])
         controls = await rq.get_controls_of(student, sem)
         controls.points_1 = row["РК 1"]
         controls.points_2 = row["РК 2"]
@@ -354,7 +356,8 @@ async def check_lab(cb: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "labs:remark", AssessLab.approve_or_remark)
 async def lab_remarks(cb: CallbackQuery, state: FSMContext):
     await state.set_state(AssessLab.remark)
-    await cb.message.edit_text(
+    await cb.bot.send_message(
+        cb.message.chat.id,
         "Напишите замечания или прикрепите файл с ними >>>\n\n"
         "_это сообщение будет переслано студенту_\n"
         "/cancel"
@@ -362,7 +365,7 @@ async def lab_remarks(cb: CallbackQuery, state: FSMContext):
     await cb.answer()
 
 
-@router.message(AssessLab.remark)
+@router.message(AssessLab.remark, F.text != "/cancel")
 async def send_lab_remark(message: Message, state: FSMContext):
     await state.update_data(remarks=message.text, doc=message.document)
     data = await state.get_data()
@@ -380,7 +383,7 @@ async def send_lab_remark(message: Message, state: FSMContext):
         await message.bot.send_message(
             tg_id,
             "Ваша работа проверена преподавателем. "
-            f"Замечания:\n\n{data['remarks']}"
+            f"Замечания 👇\n\n{data['remarks']}"
         )
 
     file_path = os.path.join(
@@ -388,16 +391,18 @@ async def send_lab_remark(message: Message, state: FSMContext):
     )
     os.remove(file_path)
 
-    await message.answer(f"Замечания высланы [студенту](tg://user?id={tg_id})")
+    await message.answer(f"Замечания высланы студенту")
 
 
 @router.callback_query(F.data == "labs:approve", AssessLab.approve_or_remark)
 async def approve_lab(cb: CallbackQuery, state: FSMContext):
     await state.set_state(AssessLab.approve)
-    await cb.message.edit_text(
+    await cb.bot.send_message(
+        cb.message.chat.id,
         "Оцените выполнение ЛР по пятибалльной шкале >>>\n/cancel"
     )
     await cb.answer()
+    await cb.message.delete()
 
 
 @router.message(AssessLab.approve)
@@ -532,10 +537,7 @@ async def students_progress(cb: CallbackQuery):
     sem = get_current_semester()
     progresses = [await rq.get_progress_of(s, sem) for s in students]
     homeworks = list(map(lambda p: p[0], progresses))
-    labs = [
-        list(map(lambda p: p[1][i], progresses))
-        for i in (range(3) if sem == 1 else range(3, 6))
-    ]
+    labs = [list(map(lambda p: p[1][i], progresses)) for i in range(3)]
     controls = list(map(lambda p: p[2], progresses))
     groups = [s.group for s in students]
 

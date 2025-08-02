@@ -3,7 +3,7 @@
         "sem_1_solutions": "secrets/solutions/1",
         "sem_2_solutions": "secrets/solutions/2",
         "sem_1_yaml_to_check": "/vault/sem_1_yaml_to_check",
-        "sem_2_yaml_to_check": "/vault/sem_2_yaml_to_check",
+        "sem_2_json_to_check": "/vault/sem_2_json_to_check",
         "sem_1_homeworks_to_check": "/vault/sem_1_homeworks_to_check",
         "sem_1_checked_homeworks": "/vault/sem_1_checked_homeworks",
         "sem_2_homeworks_to_check": "/vault/sem_2_homeworks_to_check",

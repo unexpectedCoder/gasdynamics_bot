@@ -1,3 +1,5 @@
+import json
+import numpy as np
 import os
 import yaml
 import os
@@ -7,7 +9,7 @@ from typing import IO
 import config as cfg
 
 
-def check_solution(file: IO, sem: int):
+def check_solution_yaml(file: IO, sem: int):
     sol = yaml.safe_load(file)
 
     variant = sol["Информация"]["Вариант"]
@@ -40,7 +42,40 @@ def check_solution(file: IO, sem: int):
     return res
 
 
-def _check_keys(sol: dict[dict], correct_sol: dict[dict]):
+def check_solution_json(file: IO, sem: int):
+    sol = yaml.safe_load(file)
+
+    variant = sol["Информация"]["Вариант"]
+    sol_fname = os.path.join(
+        cfg.get_dir(f"sem_{sem}_solutions"), f"{variant}.json"
+    )
+    with open(sol_fname, "r", encoding="utf-8") as sf:
+        correct_sol = json.load(sf)
+
+    if not _check_keys(sol, correct_sol):
+        raise ValueError("incorrect solution dict keys")
+    
+    res = {}
+    res["Информация"] = sol["Информация"]
+    del sol["Информация"]
+    del correct_sol["Информация"]
+
+    zipped = zip(correct_sol.items(), sol.items())
+    res.update({
+        key: {
+            k: _approx_eq(c[k], s[k]) for k in c
+        }
+        for ((key, c), (_, s)) in zipped
+    })
+
+    res["Проверка"] = {}
+    res["Проверка"]["Дата проверки"] = date.today()
+    res["Проверка"]["Результат"] = all_right(res)
+    
+    return res
+
+
+def  _check_keys(sol: dict[dict], correct_sol: dict[dict]):
     sol_keys = sorted(sol.keys())
     correct_keys = sorted(correct_sol.keys())
     if sol_keys == correct_keys:
@@ -54,7 +89,14 @@ def _check_keys(sol: dict[dict], correct_sol: dict[dict]):
 
 
 def _approx_eq(x, y):
-    return abs((x - y) / x) < cfg.get("rel_float_eq_accuracy")
+    eps = cfg.get("rel_float_eq_accuracy")
+    delta = 1e-7
+    if isinstance(x, list):
+        x, y = np.array(x), np.array(y)
+        x += delta
+        return np.all(np.abs((x - y) / (x + 1e-7)) < eps)
+    x += delta
+    return abs((x - y) / (x + 1e-7)) < eps
 
 
 def all_right(checked: dict):

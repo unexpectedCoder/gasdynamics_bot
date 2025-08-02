@@ -8,4 +8,4 @@ def get_current_semester():
 
 def rus_date(d: date):
     """Transform date `d` into `dd.mm.yyyy` format."""
-    return f"{d.day}.{d.month:02}.{d.year}"
+    return d.strftime(r"%d.%m.%Y")

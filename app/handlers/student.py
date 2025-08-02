@@ -1,3 +1,4 @@
+import json
 import os
 import yaml
 from aiogram import F, Router
@@ -12,7 +13,9 @@ import app.database.requests as rq
 import app.keyboards.inline as ikb
 import app.keyboards.keyboards as kb
 import config as cfg
-from app.checker import all_right, check_solution, whats_wrong
+from app.checker import (
+    all_right, check_solution_json, check_solution_yaml, whats_wrong
+)
 from app.filters import IsStudent
 from app.states import BotCheckHomework, SendLabReport, SendHomeworkReport
 from app.utils.seasons import get_current_semester, rus_date
@@ -187,9 +190,8 @@ async def get_homework_mark(cb: CallbackQuery):
 @router.callback_query(F.data == "homework:algo")
 async def homework_algo(cb: CallbackQuery):
     text = \
-        "1. Получить у бота свой вариант ДЗ (кнопка ДЗ -> Получить)\n" \
-        "2. Решить задачу, сформировав файл с ответами по шаблону "\
-        "(шаблон найдёте команде ДЗ -> Шаблон результатов)\n" \
+        "1. Получить у бота свой вариант ДЗ\n" \
+        "2. Решить задачу, сформировав файл с ответами по шаблону\n" \
         "3. Как только бот подтвердил правильность решения - отсылаете отчёт" \
         "преподавателю опять же через меню ДЗ (оно немного изменится " \
         "после прохождения проверки ботом - " \
@@ -240,25 +242,24 @@ async def send_homework2bot(message: Message, state: FSMContext):
         await message.answer("Вы не прикрепили документ")
         return
     
-    if not _is_yaml(data):
+    fname = data["send_file"].file_name.rsplit(".", maxsplit=1)[-1]
+    formats = {"yaml", "yml", "json"}
+    if fname not in formats:
         await message.answer(
             "Не тот формат файла: "
             f"`.{message.document.file_name.rsplit('.', 1)[-1]}`. "
-            "Требуется формат `.yaml` или `.yml`."
+            f"Допустимы следующие форматы: {', '.join(formats)}"
         )
         return
     
-    await _check_yaml(message, data)
-
-
-def _is_yaml(data: dict):
-    fname = data["send_file"].file_name
-    return fname.endswith(".yml") or fname.endswith(".yaml")
+    if data["sem"] == 1:
+        await _check_yaml(message, data)
+        return
+    await _check_json(message, data)
 
 
 async def _check_yaml(message: Message, data: dict):
     doc = data["send_file"]
-
     sem = data["sem"]
     doc_dir = cfg.get_dir(f"sem_{sem}_yaml_to_check")
     doc_path = os.path.join(doc_dir, f"{message.from_user.id}.yml")
@@ -274,7 +275,7 @@ async def _check_yaml(message: Message, data: dict):
         await message.answer(
             f"В файле указан вариант № {yaml_variant}, "
             f"не совпадающий с выданным вариантом № {correct_variant}. "
-            f"Посмотрите на условие вашего задания (ДЗ -> Получить -> Условие)"
+            f"Посмотрите на условие вашего задания"
         )
         return
 
@@ -302,7 +303,55 @@ async def _check_yaml(message: Message, data: dict):
     await message.answer(
         f"{MARK_RIGHT} Проверка прошла успешно.\n"
         "Теперь вы можете отправить преподавателю на проверку "
-        "текстовый отчёт в формате PDF (ДЗ -> Отправить отчёт)"
+        "текстовый отчёт в формате PDF"
+    )
+
+    os.remove(doc_path)
+
+
+async def _check_json(message: Message, data: dict):
+    doc = data["send_file"]
+    sem = data["sem"]
+    doc_dir = cfg.get_dir(f"sem_{sem}_json_to_check")
+    doc_path = os.path.join(doc_dir, f"{message.from_user.id}.json")
+    await message.bot.download(doc, doc_path)
+
+    work = data["work"]
+    correct_variant = work.variant
+    with open(doc_path, "r", encoding="utf-8") as f:
+        json_data = json.load(f)
+    json_variant = json_data["Информация"]["Вариант"]
+    
+    if correct_variant != json_variant:
+        await message.answer(
+            f"В файле указан вариант № {json_variant}, "
+            f"не совпадающий с выданным вариантом № {correct_variant}. "
+            f"Посмотрите на условие вашего задания"
+        )
+        return
+
+    try:
+        checked = check(doc_path, sem)
+    except ValueError:
+        await message.answer(
+            "Файл с ответами не соответствует шаблону"
+        )
+        return
+    except Exception as ex:
+        await message.answer(f"Упс... {ex}")
+        return
+    
+    if not all_right(checked):
+        wrongs = "".join([f" - {w}\n" for w in whats_wrong(checked)[:-1]])
+        await message.answer(f"{MARK_WRONG} Есть ошибки:\n\n{wrongs}")
+        return
+    
+    await rq.approve_homework(data["student"], date.today(), sem)
+
+    await message.answer(
+        f"{MARK_RIGHT} Проверка прошла успешно.\n"
+        "Теперь вы можете отправить преподавателю на проверку "
+        "текстовый отчёт в формате PDF"
     )
 
     os.remove(doc_path)
@@ -310,7 +359,9 @@ async def _check_yaml(message: Message, data: dict):
 
 def check(doc_path: str, sem: int):
     with open(doc_path, "r", encoding="utf-8") as f:
-        return check_solution(f, sem)
+        if sem == 1:
+            return check_solution_yaml(f, sem)
+        return check_solution_json(f, sem)
 
 
 @router.message(StateFilter(BotCheckHomework), Command("cancel"))
@@ -339,20 +390,18 @@ async def send_homework_report(cb: CallbackQuery, state: FSMContext):
     await cb.bot.send_message(
         cb.message.chat.id, "Прикрепите файл отчёта в формате PDF >>>\n/cancel",
     )
-    await cb.message.delete()
+
     await cb.answer()
+    await cb.message.delete()
 
 
-@router.message(SendHomeworkReport.send_pdf)
+@router.message(SendHomeworkReport.send_pdf, F.document)
 async def send_homework_report_pdf(message: Message, state: FSMContext):
     await state.update_data(send_file=message.document)
     data = await state.get_data()
     await state.clear()
     doc = data["send_file"]
 
-    if not doc:
-        await message.answer("Вы не прикрепили PDF-файл")
-        return
     if not doc.file_name.endswith(".pdf"):
         await message.answer("Не тот формат отчёта: требуется `.pdf`")
         return
@@ -379,7 +428,7 @@ async def _process_homework_report(message: Message, data: dict):
 
     await message.bot.send_message(
         os.getenv("OWNER_ID"),
-        f"{s} прислал(а) на проверку отчёт по ДЗ вар. № {w.variant}"
+        f"{s.get_name()} прислал(а) на проверку отчёт по ДЗ вар. № {w.variant}"
     )
 
 
@@ -484,7 +533,6 @@ async def send_lab_pdf(message: Message, state: FSMContext):
         )
         return
     
-    teacher_tg = os.getenv('OWNER_ID')
     s = await rq.get_student_by_tg(message.from_user.id)
     lab_i = data["lab_i"]
     lab = await rq.get_lab_of(s, lab_i)
@@ -507,7 +555,8 @@ async def send_lab_pdf(message: Message, state: FSMContext):
 
     await message.answer("Работа отправлена на проверку преподавателю")
     await message.bot.send_message(
-        teacher_tg, f"{s} прислал(а) отчёт по ЛР № {lab_i}"
+        os.getenv('OWNER_ID'),
+        f"{s.get_name()} прислал(а) отчёт по ЛР № {lab_i}"
     )
 
 

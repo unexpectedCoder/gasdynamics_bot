@@ -14,9 +14,6 @@ from app.handlers.student import router as student_router
 from app.handlers.teacher import router as teacher_router
 
 
-# TODO Проверка ДЗ в формате JSON
-
-
 async def main():
     token = os.getenv("TOKEN")
     bot = Bot(

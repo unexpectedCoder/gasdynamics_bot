@@ -345,7 +345,7 @@ async def get_progress_of(session: AsyncSession, s: Student, sem: int):
     hw = hw.points if hw else None
     
     labs_n = (1, 2, 3) if sem == 1 else (4, 5, 6)
-    labs = [await get_lab_of(s, lab_n) for lab_n in labs_n]
+    labs = [await get_lab_of(s, n) for n in labs_n]
     for i, lab in enumerate(labs):
         labs[i] = lab.points if lab else None
     
