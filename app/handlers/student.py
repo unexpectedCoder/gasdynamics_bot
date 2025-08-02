@@ -98,12 +98,12 @@ async def get_homework_deadline(cb: CallbackQuery):
 async def get_homework_results_template(cb: CallbackQuery):
     sem = get_current_semester()
     template_name = \
-        cfg.YAMLTemplate.HW_1 if sem == 1 else cfg.YAMLTemplate.HW_2
-    yaml_template_path = cfg.get_file(
+        cfg.HWResultsTemplate.HW_1 if sem == 1 else cfg.HWResultsTemplate.HW_2
+    template_path = cfg.get_file(
         template_name.value.rsplit(":", maxsplit=1)[-1]
     )
 
-    if not os.path.exists(yaml_template_path):
+    if not os.path.exists(template_path):
         await cb.message.edit_text(
             "Не найден шаблон YAML-файла решения. Обратитесь к преподавателю"
         )
@@ -111,22 +111,60 @@ async def get_homework_results_template(cb: CallbackQuery):
         return
     
     # Trying to find a cached file
-    yaml_file_id = cfg.get_link(template_name)
-    yaml_file = FSInputFile(yaml_template_path) if not yaml_file_id else None
-
+    file_id = cfg.get_link(template_name)
     s = await rq.get_student_by_tg(cb.from_user.id)
     w = await rq.get_homework_of(s, sem)
     msg = await cb.bot.send_document(
         cb.message.chat.id,
-        yaml_file if yaml_file else yaml_file_id,
+        file_id if file_id else FSInputFile(template_path),
         caption=cfg.get_answer("help_yaml"),
-        reply_markup=ikb.homework_builder(w.approved)
+        reply_markup=ikb.hw_results_code
     )
-    if not yaml_file_id:
+    if not file_id:
         cfg.set_link(template_name, msg.document.file_id)
     
-    await cb.message.delete()
     await cb.answer()
+    await cb.message.delete()
+
+
+@router.callback_query(F.data == "homework:template_file_code")
+async def get_homework_template_code(cb: CallbackQuery):
+    await cb.answer()
+    sem = get_current_semester()
+    if sem == 1:
+        await cb.bot.send_message(
+            cb.message.chat.id, cfg.get_answer("help_pyyaml")
+        )
+        return
+    await cb.bot.send_message(
+        cb.message.chat.id,
+        '```python\n'
+        'import json\n\n'
+        'with open("results.json", "w", encoding="utf-8") as f:\n'
+        '    json.dump(solution, f, indent=4, ensure_ascii=False)\n'
+        '```'
+        'Здесь `solution` является словарём с требуемой структурой, совпадающей со структурой JSON-файла с ответами:'
+        '```python\n'
+        'import numpy as np\n\n'
+        'solution = {\n'
+        '    "Вариант": 0,\n'
+        '    "Скорость набегающего потока, число Маха": mach_0,\n'
+        '    "Углы клина, градус": [\n'
+        '        np.degrees(beta_1),\n'
+        '        np.degrees(beta_2),\n'
+        '        np.degrees(beta_3)\n'
+        '    ],\n'
+        '    "1": {\n'
+        '        "Скорость потока, число Маха": [\n'
+        '            mach_0,\n'
+        '            mach_1,\n'
+        '            mach_2,\n'
+        '            mach_3\n'
+        '        ],\n'
+        '    и т. д.\n'
+        "```\n"
+        'При расчёте сначала формируете словарь `solution`, записывая в него значения соответствующих переменных, и в конце расчётов сохраняете его в файл JSON. Всё полностью аналогично работе с файлами YAML.\n\n Сформированный таким образом JSON-файл отправляете на проверку боту'
+    )
 
 
 @router.callback_query(F.data == "homework:mark")

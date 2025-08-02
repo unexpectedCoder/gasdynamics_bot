@@ -17,8 +17,7 @@ student = ReplyKeyboardMarkup(
     keyboard=[
         [KB(text="Домашнее задание 📕")],
         [KB(text="Лабораторные работы 📗")],
-        [KB(text="Успеваемость 📈")],
-        [KB(text=about_bot)]
+        [KB(text="Успеваемость 📈")]
     ],
     resize_keyboard=True,
     input_field_placeholder=placeholder
@@ -35,9 +34,6 @@ teacher = ReplyKeyboardMarkup(
         ],
         [
             KB(text="Студенты 📙")
-        ],
-        [
-            KB(text=about_bot)
         ]
     ],
     resize_keyboard=True,

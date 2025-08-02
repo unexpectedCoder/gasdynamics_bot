@@ -16,6 +16,7 @@
     "files": {
         "bot_speech": "app/files/scratches/bot_speech.yml",
         "hw_nozzle_template": "app/files/scratches/hw_nozzle_template.yml",
+        "hw_wedge_template": "app/files/scratches/hw_wedge_template.json",
         "home_nozzle": "app/files/home_nozzle.json",
         "home_shock_wedge": "app/files/home_shock_wedge.json",
         "files_links": "files_links.json",

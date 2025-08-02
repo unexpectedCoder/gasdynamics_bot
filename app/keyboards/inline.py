@@ -190,3 +190,11 @@ stats = InlineKeyboardMarkup(inline_keyboard=[
         IKB(text="ДЗ № 2", callback_data="stats_hw_2")
     ]
 ])
+
+
+hw_results_code = InlineKeyboardMarkup(inline_keyboard=[
+    [IKB(
+        text="Код для формирования такого файла",
+        callback_data="homework:template_file_code"
+    )]
+])

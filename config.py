@@ -93,9 +93,9 @@ class Lab(Enum):
     LAB_6 = "labs:6"
 
 
-class YAMLTemplate(Enum):
-    HW_1 = "yaml_templates:homework_nozzle",
-    HW_2 = "yaml_templates:homework_shock_wedge"
+class HWResultsTemplate(Enum):
+    HW_1 = "yaml_templates:hw_nozzle_template"
+    HW_2 = "json_templates:hw_wedge_template"
 
 
 class WordTemplate(Enum):
@@ -113,12 +113,12 @@ class Video(Enum):
     CODE = "video:code"
 
 
-AnyConfEnum = Lab | WordTemplate | YAMLTemplate | Video
+AnyConfEnum = Lab | WordTemplate | HWResultsTemplate | Video
 
 
 def get_link(tmpl: AnyConfEnum):
     section, filename = tmpl.value.rsplit(":", maxsplit=1)
-    return files_links[section][filename]
+    return files_links[section].get(filename, None)
 
 
 def set_link(tmpl: AnyConfEnum, link: str):
