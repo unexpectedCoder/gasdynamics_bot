@@ -321,16 +321,17 @@ async def _check_json(message: Message, data: dict):
     doc_path = os.path.join(doc_dir, f"{message.from_user.id}.json")
 
     bot = message.bot
-    file_id = message.document.file_id
+    file_id = doc.file_id
     file_info = await bot.get_file(file_id)
     file_path = file_info.file_path
-    data_file = await bot.download_file(file_path, doc_path)
+    downloaded_file = await bot.download_file(file_path, doc_path)
 
     work = data["work"]
     correct_variant = work.variant
-    json_data = json.load(data_file)
-    json_variant = json_data["Вариант"]
+    with open(doc_path, "r", encoding="utf-8") as f:
+        json_data = json.load(f)
     
+    json_variant = json_data["Информация"]["Вариант"]
     if correct_variant != json_variant:
         await message.answer(
             f"В файле указан вариант № {json_variant}, "
