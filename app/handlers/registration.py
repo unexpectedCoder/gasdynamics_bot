@@ -37,7 +37,7 @@ async def reg_mark_book(message: Message, state: FSMContext):
             "Проверьте правильность номера зачётной книжки "
             "и попробуйте ещё раз зарегистрироваться (/reg) "
             "или обратитесь к преподавателю",
-            reply_markup=kb.user
+            reply_markup=kb.default_user
         )
         return
     
