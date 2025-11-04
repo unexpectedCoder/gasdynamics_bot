@@ -222,17 +222,20 @@ async def homework_bot_check(cb: CallbackQuery, state: FSMContext):
         await cb.answer()
         return
 
-    await state.set_state(BotCheckHomework.send_yaml)
+    await state.set_state(BotCheckHomework.send_num_solution)
     await state.update_data(sem=sem, student=student, work=work)
+
+    file_type = "YAML" if sem == 1 else "JSON"
     await cb.bot.send_message(
-        cb.message.chat.id, "Прикрепите YAML-файл с ответами >>>\n/cancel"
+        cb.message.chat.id,
+        f"Прикрепите файл {file_type} с ответами >>>\n/cancel"
     )
 
     await cb.answer()
     await cb.message.delete()
 
 
-@router.message(BotCheckHomework.send_yaml)
+@router.message(BotCheckHomework.send_num_solution)
 async def send_homework2bot(message: Message, state: FSMContext):
     await state.update_data(send_file=message.document)
     data = await state.get_data()
@@ -242,8 +245,10 @@ async def send_homework2bot(message: Message, state: FSMContext):
         await message.answer("Вы не прикрепили документ")
         return
     
+    sem = data["sem"]
     fname = data["send_file"].file_name.rsplit(".", maxsplit=1)[-1]
-    formats = {"yaml", "yml", "json"}
+    formats = {"yaml", "yml"} if sem == 1 else {"json",}
+    
     if fname not in formats:
         await message.answer(
             "Не тот формат файла: "
@@ -252,7 +257,7 @@ async def send_homework2bot(message: Message, state: FSMContext):
         )
         return
     
-    if data["sem"] == 1:
+    if sem == 1:
         await _check_yaml(message, data)
         return
     await _check_json(message, data)
@@ -314,13 +319,17 @@ async def _check_json(message: Message, data: dict):
     sem = data["sem"]
     doc_dir = cfg.get_dir(f"sem_{sem}_json_to_check")
     doc_path = os.path.join(doc_dir, f"{message.from_user.id}.json")
-    await message.bot.download(doc, doc_path)
+
+    bot = message.bot
+    file_id = message.document.file_id
+    file_info = await bot.get_file(file_id)
+    file_path = file_info.file_path
+    data_file = await bot.download_file(file_path, doc_path)
 
     work = data["work"]
     correct_variant = work.variant
-    with open(doc_path, "r", encoding="utf-8") as f:
-        json_data = json.load(f)
-    json_variant = json_data["Информация"]["Вариант"]
+    json_data = json.load(data_file)
+    json_variant = json_data["Вариант"]
     
     if correct_variant != json_variant:
         await message.answer(

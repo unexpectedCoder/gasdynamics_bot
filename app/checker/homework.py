@@ -45,7 +45,7 @@ def check_solution_yaml(file: IO, sem: int):
 def check_solution_json(file: IO, sem: int):
     sol = yaml.safe_load(file)
 
-    variant = sol["Информация"]["Вариант"]
+    variant = sol["Вариант"]
     sol_fname = os.path.join(
         cfg.get_dir(f"sem_{sem}_solutions"), f"{variant}.json"
     )
@@ -56,10 +56,6 @@ def check_solution_json(file: IO, sem: int):
         raise ValueError("incorrect solution dict keys")
     
     res = {}
-    res["Информация"] = sol["Информация"]
-    del sol["Информация"]
-    del correct_sol["Информация"]
-
     zipped = zip(correct_sol.items(), sol.items())
     res.update({
         key: {
@@ -95,13 +91,14 @@ def _approx_eq(x, y):
         x, y = np.array(x), np.array(y)
         x += delta
         return np.all(np.abs((x - y) / (x + 1e-7)) < eps)
+    if isinstance(x, int) and isinstance(y, int):
+        return x == y
     x += delta
     return abs((x - y) / (x + 1e-7)) < eps
 
 
 def all_right(checked: dict):
     d = checked.copy()
-    del d["Информация"]
     del d["Проверка"]
     return all([
         v

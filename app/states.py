@@ -25,7 +25,7 @@ class AssessLab(StatesGroup):
 
 
 class BotCheckHomework(StatesGroup):
-    send_yaml = State()
+    send_num_solution = State()
 
 
 class Registration(StatesGroup):
