@@ -544,8 +544,8 @@ async def students_progress(cb: CallbackQuery):
     progress = pd.DataFrame({
         "ФИО": [s.get_name() for s in students],
         "Группа": groups,
-        "РК 1": list(map(lambda c: c.points_1, controls)),
-        "РК 2": list(map(lambda c: c.points_2, controls)),
+        "РК 1": list(map(lambda c: 0 if c is None else c.points_1, controls)),
+        "РК 2": list(map(lambda c: 0 if c is None else c.points_2, controls)),
         "ДЗ": homeworks,
         "ЛР № 1": labs[0],
         "ЛР № 2": labs[1],
