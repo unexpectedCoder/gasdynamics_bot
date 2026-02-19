@@ -106,6 +106,50 @@ def _shuffle_variants(variants: dict):
     return dict(items)
 
 
+def _get_semester_hw(sem: int):
+    if sem < 1 or sem > 2:
+        raise RuntimeError(f"нет задания для {sem} семестра")
+    return HomeworkNozzle if sem == 1 else HomeworkShockWedge
+
+
+# ---------------------------------------------------------------------------
+# Приватные версии (принимают сессию, без декоратора)
+# ---------------------------------------------------------------------------
+
+
+async def _get_student_by_mark_book(session: AsyncSession, mark_book: str):
+    return await session.scalar(select(Student).where(Student.mark_book == mark_book))
+
+
+async def _get_homework_of(session: AsyncSession, s: Student, sem: int):
+    HW = _get_semester_hw(sem)
+    return await session.scalar(select(HW).where(HW.student_id == s.id))
+
+
+async def _get_lab_of(session: AsyncSession, s: Student, lab_n: int):
+    return await session.scalar(
+        select(Lab).where(Lab.student_id == s.id, Lab.lab_number == lab_n)
+    )
+
+
+async def _get_controls_of(session: AsyncSession, s: Student, sem: int):
+    """Возвращает список из двух контрольных работ для указанного семестра,
+    отсортированных по control_number (т.е. [РК1, РК2]).
+    """
+    numbers = (1, 2) if sem == 1 else (3, 4)
+    result = await session.scalars(
+        select(ControlWork)
+        .where(ControlWork.student_id == s.id, ControlWork.control_number.in_(numbers))
+        .order_by(ControlWork.control_number)
+    )
+    return list(result.all())
+
+
+# ---------------------------------------------------------------------------
+# Публичный API
+# ---------------------------------------------------------------------------
+
+
 @connection
 async def reg_student(session: AsyncSession, student: Student):
     await session.execute(
@@ -129,21 +173,12 @@ async def get_free_lab(session: AsyncSession, lab_n: int):
 
 @connection
 async def get_homework_of(session: AsyncSession, s: Student, sem: int):
-    HW = _get_semester_hw(sem)
-    return await session.scalar(select(HW).where(HW.student_id == s.id))
-
-
-def _get_semester_hw(sem: int):
-    if sem < 1 or sem > 2:
-        raise RuntimeError(f"нет задания для {sem} семестра")
-    return HomeworkNozzle if sem == 1 else HomeworkShockWedge
+    return await _get_homework_of(session, s, sem)
 
 
 @connection
 async def get_lab_of(session: AsyncSession, s: Student, lab_n: int):
-    return await session.scalar(
-        select(Lab).where(Lab.student_id == s.id, Lab.lab_number == lab_n)
-    )
+    return await _get_lab_of(session, s, lab_n)
 
 
 @connection
@@ -255,24 +290,24 @@ async def get_student_by_tg(session: AsyncSession, tg_id: int):
 
 @connection
 async def get_student_by_mark_book(session: AsyncSession, mark_book: str):
-    return await session.scalar(select(Student).where(Student.mark_book == mark_book))
+    return await _get_student_by_mark_book(session, mark_book)
 
 
 @connection
 async def add_student(session: AsyncSession, data: dict):
-    s = await get_student_by_mark_book(data["mark_book"])
+    s = await _get_student_by_mark_book(session, data["mark_book"])
     if s:
         return s, False
 
     session.add(Student(**data))
     await session.commit()
-    return await get_student_by_mark_book(data["mark_book"]), True
+    return await _get_student_by_mark_book(session, data["mark_book"]), True
 
 
 @connection
 async def delete_student(session: AsyncSession, s: Student):
     for sem in (1, 2):
-        hw = await get_homework_of(s, sem)
+        hw = await _get_homework_of(session, s, sem)
         if hw:
             table = type(hw)
             await session.execute(
@@ -307,31 +342,22 @@ async def delete_student(session: AsyncSession, s: Student):
 
 @connection
 async def get_progress_of(session: AsyncSession, s: Student, sem: int):
-    hw = await get_homework_of(s, sem)
+    hw = await _get_homework_of(session, s, sem)
     hw = hw.points if hw else None
 
     labs_n = (1, 2, 3) if sem == 1 else (4, 5, 6)
-    labs = [await get_lab_of(s, n) for n in labs_n]
+    labs = [await _get_lab_of(session, s, n) for n in labs_n]
     for i, lab in enumerate(labs):
         labs[i] = lab.points if lab else None
 
-    controls = await get_controls_of(s, sem)
+    controls = await _get_controls_of(session, s, sem)
 
     return hw, labs, controls
 
 
 @connection
 async def get_controls_of(session: AsyncSession, s: Student, sem: int):
-    """Возвращает список из двух контрольных работ для указанного семестра,
-    отсортированных по control_number (т.е. [РК1, РК2]).
-    """
-    numbers = (1, 2) if sem == 1 else (3, 4)
-    result = await session.scalars(
-        select(ControlWork)
-        .where(ControlWork.student_id == s.id, ControlWork.control_number.in_(numbers))
-        .order_by(ControlWork.control_number)
-    )
-    return list(result.all())
+    return await _get_controls_of(session, s, sem)
 
 
 @connection
