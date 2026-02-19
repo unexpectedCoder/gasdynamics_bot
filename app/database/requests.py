@@ -9,19 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import config as cfg
 from app.database.models import (
-    LABS_TYPES,
     AnyHomework,
-    AnyLab,
-    ControlWorksSem1,
-    ControlWorksSem2,
+    ControlWork,
     HomeworkNozzle,
     HomeworkShockWedge,
-    Lab_1,
-    Lab_2,
-    Lab_3,
-    Lab_4,
-    Lab_5,
-    Lab_6,
+    Lab,
     Student,
     Teacher,
     async_session,
@@ -79,8 +71,8 @@ def _init_students(session: AsyncSession):
 async def _init_controls(session: AsyncSession):
     students = await session.scalars(select(Student))
     for s in students:
-        session.add(ControlWorksSem1(student_id=s.id))
-        session.add(ControlWorksSem2(student_id=s.id))
+        for n in range(1, 5):  # 4 контрольных работы: 1,2 — сем. 1; 3,4 — сем. 2
+            session.add(ControlWork(student_id=s.id, control_number=n))
 
 
 async def _init_homework_nozzle(session: AsyncSession):
@@ -104,14 +96,14 @@ async def _init_homework_shock_wedge(session: AsyncSession):
 async def _init_labs(session: AsyncSession):
     students = await session.scalars(select(Student))
     for s in students:
-        for lab in (Lab_1, Lab_2, Lab_3, Lab_4, Lab_5, Lab_6):
-            session.add(lab(student_id=s.id))
+        for n in range(1, 7):
+            session.add(Lab(student_id=s.id, lab_number=n))
 
 
 def _shuffle_variants(variants: dict):
-    variants = list(variants.items())
-    rand.shuffle(variants)
-    return dict(variants)
+    items = list(variants.items())
+    rand.shuffle(items)
+    return dict(items)
 
 
 @connection
@@ -130,8 +122,9 @@ async def get_free_homework(session: AsyncSession, sem: int):
 
 @connection
 async def get_free_lab(session: AsyncSession, lab_n: int):
-    lab = LABS_TYPES[lab_n]
-    return await session.scalar(select(lab).where(lab.student_id.is_(None)))
+    return await session.scalar(
+        select(Lab).where(Lab.lab_number == lab_n, Lab.student_id.is_(None))
+    )
 
 
 @connection
@@ -148,8 +141,9 @@ def _get_semester_hw(sem: int):
 
 @connection
 async def get_lab_of(session: AsyncSession, s: Student, lab_n: int):
-    lab = LABS_TYPES[lab_n]
-    return await session.scalar(select(lab).where(lab.student_id == s.id))
+    return await session.scalar(
+        select(Lab).where(Lab.student_id == s.id, Lab.lab_number == lab_n)
+    )
 
 
 @connection
@@ -160,11 +154,8 @@ async def set_homework(session: AsyncSession, s: Student, hw: AnyHomework):
 
 
 @connection
-async def set_lab(session: AsyncSession, s: Student, lab: AnyLab):
-    table = type(lab)
-    await session.execute(
-        update(table).where(table.id == lab.id).values(student_id=s.id)
-    )
+async def set_lab(session: AsyncSession, s: Student, lab: Lab):
+    await session.execute(update(Lab).where(Lab.id == lab.id).values(student_id=s.id))
     await session.commit()
 
 
@@ -191,7 +182,7 @@ async def approve_homework(
 @connection
 async def get_students_homeworks(session: AsyncSession, sem: int):
     HW = _get_semester_hw(sem)
-    return await session.scalars(select(HW).where(HW.student_id))
+    return await session.scalars(select(HW).where(HW.student_id.isnot(None)))
 
 
 @connection
@@ -202,9 +193,8 @@ async def send_homework(session: AsyncSession, hw: AnyHomework):
 
 
 @connection
-async def send_lab(session: AsyncSession, lab: AnyLab):
-    table = type(lab)
-    await session.execute(update(table).where(table.id == lab.id).values(send=True))
+async def send_lab(session: AsyncSession, lab: Lab):
+    await session.execute(update(Lab).where(Lab.id == lab.id).values(send=True))
     await session.commit()
 
 
@@ -224,15 +214,13 @@ async def assess_homework(session: AsyncSession, data: dict, sem: int):
 
 
 @connection
-async def assess_lab(session: AsyncSession, data: dict, lab: AnyLab):
-    student = data["student"]
+async def assess_lab(session: AsyncSession, data: dict, lab: Lab):
     points = data["points"]
     date = data["date"]
 
-    table = type(lab)
     await session.execute(
-        update(table)
-        .where(table.student_id == student.id)
+        update(Lab)
+        .where(Lab.id == lab.id)
         .values(done=True, done_date=date, points=points)
     )
     await session.commit()
@@ -301,17 +289,17 @@ async def delete_student(session: AsyncSession, s: Student):
                 )
             )
 
-    for lab_n in range(1, 7):
-        lab = await get_lab_of(s, lab_n)
-        if lab:
-            table = type(lab)
-            await session.execute(
-                update(table)
-                .where(table.student_id == s.id)
-                .values(
-                    student_id=None, send=False, done=False, done_date=None, points=None
-                )
-            )
+    await session.execute(
+        update(Lab)
+        .where(Lab.student_id == s.id)
+        .values(student_id=None, send=False, done=False, done_date=None, points=None)
+    )
+
+    await session.execute(
+        update(ControlWork)
+        .where(ControlWork.student_id == s.id)
+        .values(student_id=None, approved=False, points=0)
+    )
 
     await session.execute(delete(Student).where(Student.id == s.id))
     await session.commit()
@@ -334,20 +322,25 @@ async def get_progress_of(session: AsyncSession, s: Student, sem: int):
 
 @connection
 async def get_controls_of(session: AsyncSession, s: Student, sem: int):
-    CW = ControlWorksSem1 if sem == 1 else ControlWorksSem2
-    return await session.scalar(select(CW).where(CW.student_id == s.id))
+    """Возвращает список из двух контрольных работ для указанного семестра,
+    отсортированных по control_number (т.е. [РК1, РК2]).
+    """
+    numbers = (1, 2) if sem == 1 else (3, 4)
+    result = await session.scalars(
+        select(ControlWork)
+        .where(ControlWork.student_id == s.id, ControlWork.control_number.in_(numbers))
+        .order_by(ControlWork.control_number)
+    )
+    return list(result.all())
 
 
 @connection
-async def set_control_points_of(
-    session: AsyncSession, s: Student, controls: ControlWorksSem1 | ControlWorksSem2
-):
-    CW = type(controls)
-    await session.execute(
-        update(CW)
-        .values(points_1=controls.points_1, points_2=controls.points_2)
-        .where(CW.student_id == s.id)
-    )
+async def set_control_points_of(session: AsyncSession, controls: list[ControlWork]):
+    """Сохраняет очки для каждой контрольной работы в списке."""
+    for cw in controls:
+        await session.execute(
+            update(ControlWork).where(ControlWork.id == cw.id).values(points=cw.points)
+        )
     await session.commit()
 
 

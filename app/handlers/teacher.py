@@ -237,8 +237,8 @@ async def exam_controlling(cb: CallbackQuery, state: FSMContext):
             "id": [s.id for s in students],
             "ФИО": [s.get_name() for s in students],
             "Группа": groups,
-            "РК 1": list(map(lambda c: c.points_1, controls)),
-            "РК 2": list(map(lambda c: c.points_2, controls)),
+            "РК 1": list(map(lambda c: c[0].points if c else 0, controls)),
+            "РК 2": list(map(lambda c: c[1].points if c else 0, controls)),
         }
     ).sort_values(by=["Группа", "ФИО"])
 
@@ -282,8 +282,8 @@ async def send_controls_excel(message: Message, state: FSMContext):
     for _, row in excel.iterrows():
         student = await rq.get_student_by_id(row["id"])
         controls = await rq.get_controls_of(student, sem)
-        controls.points_1 = row["РК 1"]
-        controls.points_2 = row["РК 2"]
+        controls[0].points = row["РК 1"]
+        controls[1].points = row["РК 2"]
         await rq.set_control_points_of(student, controls)
 
     os.remove(dst)
@@ -525,8 +525,8 @@ async def students_progress(cb: CallbackQuery):
         {
             "ФИО": [s.get_name() for s in students],
             "Группа": groups,
-            "РК 1": list(map(lambda c: 0 if c is None else c.points_1, controls)),
-            "РК 2": list(map(lambda c: 0 if c is None else c.points_2, controls)),
+            "РК 1": list(map(lambda c: 0 if not c else c[0].points, controls)),
+            "РК 2": list(map(lambda c: 0 if not c else c[1].points, controls)),
             "ДЗ": homeworks,
             "ЛР № 1": labs[0],
             "ЛР № 2": labs[1],

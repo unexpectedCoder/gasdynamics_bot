@@ -1,9 +1,16 @@
 import os
+from datetime import date
 from enum import Enum
 
-from sqlalchemy import BigInteger, Date, ForeignKey, String
+from sqlalchemy import BigInteger, Date, ForeignKey, String, UniqueConstraint
 from sqlalchemy.ext.asyncio import AsyncAttrs, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    declared_attr,
+    mapped_column,
+    relationship,
+)
 
 db_dir = "db_data"
 if os.getenv("IN_DOCKER"):
@@ -27,6 +34,21 @@ class Base(AsyncAttrs, DeclarativeBase):
     pass
 
 
+class HomeworkMixin:
+    id: Mapped[int] = mapped_column(primary_key=True)
+    deadline: Mapped[date | None] = mapped_column(Date, nullable=True)
+    approved: Mapped[bool] = mapped_column(default=False)
+    approve_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    send: Mapped[bool] = mapped_column(default=False)
+    done: Mapped[bool] = mapped_column(default=False)
+    done_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    points: Mapped[int | None] = mapped_column(nullable=True)
+
+    @declared_attr
+    def student_id(cls) -> Mapped[int | None]:
+        return mapped_column(ForeignKey("students.id"), unique=True, nullable=True)
+
+
 class Teacher(Base):
     __tablename__ = "teachers"
 
@@ -34,7 +56,7 @@ class Teacher(Base):
     firstname: Mapped[str] = mapped_column(String(MAX_STR_LEN))
     middlename: Mapped[str] = mapped_column(String(MAX_STR_LEN))
     lastname: Mapped[str] = mapped_column(String(MAX_STR_LEN))
-    tg_id = mapped_column(BigInteger, nullable=True, unique=True)
+    tg_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, unique=True)
 
 
 class Student(Base):
@@ -46,7 +68,18 @@ class Student(Base):
     lastname: Mapped[str] = mapped_column(String(MAX_STR_LEN))
     group: Mapped[str] = mapped_column(String(MAX_STR_LEN))
     mark_book: Mapped[str] = mapped_column(String(MAX_STR_LEN), unique=True)
-    tg_id = mapped_column(BigInteger, unique=True, nullable=True)
+    tg_id: Mapped[int | None] = mapped_column(BigInteger, unique=True, nullable=True)
+
+    labs: Mapped[list["Lab"]] = relationship(back_populates="student", lazy="raise")
+    control_works: Mapped[list["ControlWork"]] = relationship(
+        back_populates="student", lazy="raise"
+    )
+    homework_nozzle: Mapped["HomeworkNozzle | None"] = relationship(
+        back_populates="student", lazy="raise"
+    )
+    homework_shock_wedge: Mapped["HomeworkShockWedge | None"] = relationship(
+        back_populates="student", lazy="raise"
+    )
 
     def __str__(self):
         name = self.get_name()
@@ -61,38 +94,27 @@ class Student(Base):
         return f"{self.lastname} {self.firstname} {self.middlename}"
 
 
-class ControlWorksSem1(Base):
-    __tablename__ = "control_works_sem_1"
+class ControlWork(Base):
+    __tablename__ = "control_works"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    approved_1: Mapped[bool] = mapped_column(default=False)
-    points_1: Mapped[int] = mapped_column(default=0)
-    approved_2: Mapped[bool] = mapped_column(default=False)
-    points_2: Mapped[int] = mapped_column(default=0)
-
-    student_id: Mapped[int] = mapped_column(
-        ForeignKey("students.id"), unique=True, nullable=True
+    control_number: Mapped[int] = mapped_column()
+    approved: Mapped[bool] = mapped_column(default=False)
+    points: Mapped[int] = mapped_column(default=0)
+    student_id: Mapped[int | None] = mapped_column(
+        ForeignKey("students.id"), nullable=True
     )
 
-
-class ControlWorksSem2(Base):
-    __tablename__ = "control_works_sem_2"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    approved_1: Mapped[bool] = mapped_column(default=False)
-    points_1: Mapped[int] = mapped_column(default=0)
-    approved_2: Mapped[bool] = mapped_column(default=False)
-    points_2: Mapped[int] = mapped_column(default=0)
-
-    student_id: Mapped[int] = mapped_column(
-        ForeignKey("students.id"), unique=True, nullable=True
+    student: Mapped["Student | None"] = relationship(
+        back_populates="control_works", lazy="raise"
     )
 
+    __table_args__ = (UniqueConstraint("student_id", "control_number"),)
 
-class HomeworkNozzle(Base):
+
+class HomeworkNozzle(HomeworkMixin, Base):
     __tablename__ = "homes_nozzle"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
     variant: Mapped[int] = mapped_column(unique=True)
     p0: Mapped[str] = mapped_column(String(MAX_STR_LEN))
     T0: Mapped[str] = mapped_column(String(MAX_STR_LEN))
@@ -105,33 +127,23 @@ class HomeworkNozzle(Base):
     beta: Mapped[str] = mapped_column(String(MAX_STR_LEN))
     rel_propel_mass: Mapped[str] = mapped_column(String(MAX_STR_LEN))
 
-    student_id: Mapped[int] = mapped_column(
-        ForeignKey("students.id"), unique=True, nullable=True
+    student: Mapped["Student | None"] = relationship(
+        back_populates="homework_nozzle", lazy="raise"
     )
-    deadline: Mapped[Date] = mapped_column(Date, nullable=True)
-    approved: Mapped[bool] = mapped_column(default=False)
-    approve_date: Mapped[Date] = mapped_column(Date, nullable=True)
-    send: Mapped[bool] = mapped_column(default=False)
-    done: Mapped[bool] = mapped_column(default=False)
-    done_date: Mapped[Date] = mapped_column(Date, nullable=True)
-    points: Mapped[int] = mapped_column(nullable=True)
 
     def __str__(self):
         head = f"Вариант ДЗ - {self.variant}:\n"
 
-        p0 = f"  - давление в камере _p_₀ = {round(float(self.p0) * 1e-6, 2)} МПа;\n"
-        T0 = f"  - температура в камере _T_₀ = {self.T0} К;\n"
-        R = f"  - газовая постоянная _R_ = {self.R} Дж/(кг К);\n"
-        k = f"  - показатель адиабаты _k_ = {self.k};\n"
-        d_critic = f"  - диаметр критического сечения _d_\* = {self.d_critic} м;\n"
-        area_ratio = (
-            f"  - отношение площадей выходного и критического сечений "
-            f"ν = {self.area_ratio};\n"
-        )
-        d_chamber = f"  - диаметр камеры сгорания _D_\_к = {self.d_chamber} м;\n"
-        alpha = f"  - угол сужения конфузора α = {self.alpha}°;\n"
-        beta = f"  - угол расширения диффузора β = {self.beta}°;\n"
-        propel_mass = f"  - относительная масса топлива μ = {self.rel_propel_mass}."
+        p0 = f"  - давление в камере {round(float(self.p0) * 1e-6, 2)} МПа;\n"
+        T0 = f"  - температура в камере {self.T0} К;\n"
+        R = f"  - газовая постоянная {self.R} Дж/(кг К);\n"
+        k = f"  - показатель адиабаты {self.k};\n"
+        d_critic = f"  - диаметр критического сечения {self.d_critic} м;\n"
+        area_ratio = f"  - отношение площадей выходного и критического сечений {self.area_ratio};\n"
+        d_chamber = f"  - диаметр камеры сгорания {self.d_chamber} м;\n"
+        alpha = f"  - угол сужения конфузора {self.alpha}°;\n"
+        beta = f"  - угол расширения диффузора {self.beta}°;\n"
+        propel_mass = f"  - относительная масса топлива {self.rel_propel_mass}."
 
         return (
             head
@@ -148,124 +160,52 @@ class HomeworkNozzle(Base):
         )
 
 
-class HomeworkShockWedge(Base):
+class HomeworkShockWedge(HomeworkMixin, Base):
     __tablename__ = "homes_shock_wedge"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
     variant: Mapped[int] = mapped_column(unique=True)
     mach: Mapped[str] = mapped_column(String(MAX_STR_LEN))
     beta1: Mapped[str] = mapped_column(String(MAX_STR_LEN))
     beta2: Mapped[str] = mapped_column(String(MAX_STR_LEN))
     beta3: Mapped[str] = mapped_column(String(MAX_STR_LEN))
 
-    student_id: Mapped[int] = mapped_column(
-        ForeignKey("students.id"), unique=True, nullable=True
+    student: Mapped["Student | None"] = relationship(
+        back_populates="homework_shock_wedge", lazy="raise"
     )
-    deadline: Mapped[Date] = mapped_column(Date, nullable=True)
-    approved: Mapped[bool] = mapped_column(default=False)
-    approve_date: Mapped[Date] = mapped_column(Date, nullable=True)
-    send: Mapped[bool] = mapped_column(default=False)
-    done: Mapped[bool] = mapped_column(default=False)
-    done_date: Mapped[Date] = mapped_column(Date, nullable=True)
-    points: Mapped[int] = mapped_column(nullable=True)
 
     def __str__(self):
-        text = f"Вариант ДЗ *№{self.variant}*:\n\n"
+        text = f"Вариант ДЗ №{self.variant}:\n\n"
 
         mach = f"  - скорость набегающего потока M = {self.mach};\n"
         beta1 = f"  - угол β₁ = {self.beta1}°;\n"
         beta2 = f"  - угол β₂ = {self.beta2}°;\n"
         beta3 = f"  - угол β₃ = {self.beta3}°;\n"
-        k = "  - показатель адиабаты воздуха _k_ = 1.4."
+        k = "  - показатель адиабаты воздуха 1.4."
 
         return text + mach + beta1 + beta2 + beta3 + k
 
 
-class Lab_1(Base):
-    __tablename__ = "lab_1"
+class Lab(Base):
+    __tablename__ = "labs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-
-    student_id: Mapped[int] = mapped_column(
-        ForeignKey("students.id"), unique=True, nullable=True
+    lab_number: Mapped[int] = mapped_column()
+    student_id: Mapped[int | None] = mapped_column(
+        ForeignKey("students.id"), nullable=True
     )
     send: Mapped[bool] = mapped_column(default=False)
     done: Mapped[bool] = mapped_column(default=False)
-    done_date: Mapped[Date] = mapped_column(Date, nullable=True)
-    points: Mapped[int] = mapped_column(nullable=True)
+    done_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    points: Mapped[int | None] = mapped_column(nullable=True)
 
-
-class Lab_2(Base):
-    __tablename__ = "lab_2"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-
-    student_id: Mapped[int] = mapped_column(
-        ForeignKey("students.id"), unique=True, nullable=True
+    student: Mapped["Student | None"] = relationship(
+        back_populates="labs", lazy="raise"
     )
-    send: Mapped[bool] = mapped_column(default=False)
-    done: Mapped[bool] = mapped_column(default=False)
-    done_date: Mapped[Date] = mapped_column(Date, nullable=True)
-    points: Mapped[int] = mapped_column(nullable=True)
+
+    __table_args__ = (UniqueConstraint("student_id", "lab_number"),)
 
 
-class Lab_3(Base):
-    __tablename__ = "lab_3"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-
-    student_id: Mapped[int] = mapped_column(
-        ForeignKey("students.id"), unique=True, nullable=True
-    )
-    send: Mapped[bool] = mapped_column(default=False)
-    done: Mapped[bool] = mapped_column(default=False)
-    done_date: Mapped[Date] = mapped_column(Date, nullable=True)
-    points: Mapped[int] = mapped_column(nullable=True)
-
-
-class Lab_4(Base):
-    __tablename__ = "lab_4"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-
-    student_id: Mapped[int] = mapped_column(
-        ForeignKey("students.id"), unique=True, nullable=True
-    )
-    send: Mapped[bool] = mapped_column(default=False)
-    done: Mapped[bool] = mapped_column(default=False)
-    done_date: Mapped[Date] = mapped_column(Date, nullable=True)
-    points: Mapped[int] = mapped_column(nullable=True)
-
-
-class Lab_5(Base):
-    __tablename__ = "lab_5"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-
-    student_id: Mapped[int] = mapped_column(
-        ForeignKey("students.id"), unique=True, nullable=True
-    )
-    send: Mapped[bool] = mapped_column(default=False)
-    done: Mapped[bool] = mapped_column(default=False)
-    done_date: Mapped[Date] = mapped_column(Date, nullable=True)
-    points: Mapped[int] = mapped_column(nullable=True)
-
-
-class Lab_6(Base):
-    __tablename__ = "lab_6"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-
-    student_id: Mapped[int] = mapped_column(
-        ForeignKey("students.id"), unique=True, nullable=True
-    )
-    send: Mapped[bool] = mapped_column(default=False)
-    done: Mapped[bool] = mapped_column(default=False)
-    done_date: Mapped[Date] = mapped_column(Date, nullable=True)
-    points: Mapped[int] = mapped_column(nullable=True)
-
-
-class Labs(Enum):
+class LabNumber(Enum):
     LAB_1 = 1
     LAB_2 = 2
     LAB_3 = 3
@@ -274,17 +214,13 @@ class Labs(Enum):
     LAB_6 = 6
 
 
-LABS_TYPES = {
-    Labs.LAB_1.value: Lab_1,
-    Labs.LAB_2.value: Lab_2,
-    Labs.LAB_3.value: Lab_3,
-    Labs.LAB_4.value: Lab_4,
-    Labs.LAB_5.value: Lab_5,
-    Labs.LAB_6.value: Lab_6,
-}
+class ControlNumber(Enum):
+    CONTROL_SEM1_1 = 1
+    CONTROL_SEM1_2 = 2
+    CONTROL_SEM2_1 = 3
+    CONTROL_SEM2_2 = 4
 
 
-AnyLab = Lab_1 | Lab_2 | Lab_3 | Lab_4 | Lab_5 | Lab_6
 AnyHomework = HomeworkNozzle | HomeworkShockWedge
 
 
