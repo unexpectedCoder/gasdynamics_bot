@@ -1,9 +1,9 @@
 import json
 import os
-import yaml
 from enum import Enum
 from typing import Any
 
+import yaml
 
 config: dict[str, Any] = None
 
@@ -30,39 +30,23 @@ def init():
                 os.makedirs(os.path.join(*d.split("/")))
         except OSError as ex:
             print(ex)
-    
+
     path = os.path.join(*config["files"]["bot_speech"].split("/"))
     with open(path, "r", encoding="utf-8") as f:
         bot_speech = yaml.safe_load(f)
     answers = bot_speech["answers"]
 
     files_links = {
-        "labs": {
-            "1": "",
-            "2": "",
-            "3": "",
-            "4": "",
-            "5": "",
-            "6": ""
-        },
-        "yaml_templates": {
-            "homework_nozzle": ""
-        },
-        "json_templates": {
-            "homework_shock_wedge": ""
-        },
-        "word_templates": {
-            "homework": "",
-            "labwork": "",
-            "coursework": ""
-        },
+        "labs": {"1": "", "2": "", "3": "", "4": "", "5": "", "6": ""},
+        "json_templates": {"homework_nozzle": "", "homework_shock_wedge": ""},
+        "word_templates": {"homework": "", "labwork": "", "coursework": ""},
         "video": {
             "figures": "",
             "tables": "",
             "equations": "",
             "bibliography": "",
-            "code": ""
-        }
+            "code": "",
+        },
     }
 
 
@@ -96,7 +80,7 @@ class Lab(Enum):
 
 
 class HWResultsTemplate(Enum):
-    HW_1 = "yaml_templates:hw_nozzle_template"
+    HW_1 = "json_templates:hw_nozzle_template"
     HW_2 = "json_templates:hw_wedge_template"
 
 

@@ -14,7 +14,7 @@ import app.database.requests as rq
 import app.keyboards.inline as ikb
 import app.keyboards.keyboards as kb
 import config as cfg
-from app.checker import all_right, check_solution_json, check_solution_yaml, whats_wrong
+from app.checker import all_right, check_solution_json, whats_wrong
 from app.filters import IsStudent
 from app.states import BotCheckHomework, SendHomeworkReport, SendLabReport
 from app.utils.cancel_or import cancel_or
@@ -109,7 +109,7 @@ async def get_homework_results_template(cb: CallbackQuery):
 
     if not os.path.exists(template_path):
         await cb.message.edit_text(
-            "Не найден шаблон YAML-файла решения. Обратитесь к преподавателю"
+            "Не найден шаблон JSON-файла решения. Обратитесь к преподавателю"
         )
         await cb.answer()
         return
@@ -371,8 +371,6 @@ async def _check_json(message: Message, data: dict):
 
 def check(doc_path: str, sem: int):
     with open(doc_path, "r", encoding="utf-8") as f:
-        if sem == 1:
-            return check_solution_yaml(f, sem)
         return check_solution_json(f, sem)
 
 
