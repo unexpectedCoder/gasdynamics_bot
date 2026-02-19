@@ -1,7 +1,7 @@
+import json
 import os
 from pathlib import Path
 
-import yaml
 from pydantic import BaseModel, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -24,7 +24,7 @@ class Dirs(BaseModel):
 
 
 class Files(BaseModel):
-    bot_speech: str = "app/files/scratches/bot_speech.yml"
+    bot_speech: str = "app/files/scratches/bot_speech.json"
     hw_nozzle_template: str = "app/files/scratches/hw_nozzle_template.json"
     hw_wedge_template: str = "app/files/scratches/hw_wedge_template.json"
     home_nozzle: str = "app/files/home_nozzle.json"
@@ -97,5 +97,5 @@ for _key in settings.dirs.model_fields:
         print(ex)
 
 with open(get_file("bot_speech"), "r", encoding="utf-8") as f:
-    cache.bot_speech = yaml.safe_load(f)
+    cache.bot_speech = json.load(f)
 cache.answers = cache.bot_speech["answers"]

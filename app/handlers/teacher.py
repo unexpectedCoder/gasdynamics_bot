@@ -122,6 +122,7 @@ async def send_homework_remarks(message: Message, state: FSMContext):
         await message.bot.send_message(
             tg_id,
             f"Ваша работа проверена преподавателем.\nЗамечания 👇\n\n{data['remarks']}",
+            parse_mode=None,
         )
 
     sem = data["sem"]
@@ -370,6 +371,7 @@ async def send_lab_remark(message: Message, state: FSMContext):
         await message.bot.send_message(
             tg_id,
             f"Ваша работа проверена преподавателем. Замечания 👇\n\n{data['remarks']}",
+            parse_mode=None,
         )
 
     file_path = os.path.join(

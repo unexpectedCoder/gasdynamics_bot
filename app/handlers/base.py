@@ -6,6 +6,7 @@ from aiogram.types import Message
 
 import app.database.requests as rq
 import app.keyboards.keyboards as kb
+import config as cfg
 from app.handlers.registration import router as reg_router
 
 router = Router()
@@ -48,12 +49,7 @@ async def cancel_no_state(message: Message, state: FSMContext):
 @router.message(Command("about_bot"))
 @router.message(F.text.lower().startswith("о боте"))
 async def about_bot_handler(message: Message):
-    await message.answer(
-        "Бот предназначен для автоматизации проверки и учёта контрольных "
-        "мероприятий, выполняемых студентами, а также для контроля "
-        "успеваемости. Более подробная информация доступна после регистрации "
-        "при использовании соответствующих функций"
-    )
+    await message.answer(cfg.get_answer("about_bot"))
 
 
 @router.message(Command("kb"))

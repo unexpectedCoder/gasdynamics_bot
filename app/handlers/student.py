@@ -2,7 +2,6 @@ import json
 import os
 from datetime import date
 
-import yaml
 from aiogram import F, Router
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -115,7 +114,7 @@ async def get_homework_results_template(cb: CallbackQuery):
     msg = await cb.bot.send_document(
         cb.message.chat.id,
         file_id if file_id else FSInputFile(template_path),
-        caption=cfg.get_answer("help_yaml"),
+        caption=cfg.get_answer("help_json"),
         reply_markup=ikb.hw_results_code,
     )
     if not file_id:
@@ -128,41 +127,7 @@ async def get_homework_results_template(cb: CallbackQuery):
 @router.callback_query(F.data == "homework:template_file_code")
 async def get_homework_template_code(cb: CallbackQuery):
     await cb.answer()
-    sem = get_current_semester()
-    if sem == 1:
-        await cb.bot.send_message(cb.message.chat.id, cfg.get_answer("help_pyyaml"))
-        return
-    await cb.bot.send_message(
-        cb.message.chat.id,
-        "```python\n"
-        "import json\n\n"
-        'with open("results.json", "w", encoding="utf-8") as f:\n'
-        "    json.dump(solution, f, indent=4, ensure_ascii=False)\n"
-        "```"
-        "Здесь `solution` является словарём с требуемой структурой, совпадающей со структурой JSON-файла с ответами:"
-        "```python\n"
-        "import numpy as np\n\n"
-        "solution = {\n"
-        '    "Информация": {\n'
-        '        "Вариант": 0,\n'
-        '        "Скорость набегающего потока, число Маха": mach_0,\n'
-        '        "Углы клина, градус": [\n'
-        "            np.degrees(beta_1),\n"
-        "            np.degrees(beta_2),\n"
-        "            np.degrees(beta_3)\n"
-        "        ]\n"
-        "    },\n"
-        '    "1": {\n'
-        '        "Скорость потока, число Маха": [\n'
-        "            mach_0,\n"
-        "            mach_1,\n"
-        "            mach_2,\n"
-        "            mach_3\n"
-        "        ],\n"
-        "    и т. д.\n"
-        "```\n"
-        "При расчёте сначала формируете словарь `solution`, записывая в него значения соответствующих переменных, и в конце расчётов сохраняете его в файл JSON. Всё полностью аналогично работе с файлами YAML.\n\n Сформированный таким образом JSON-файл отправляете на проверку боту",
-    )
+    await cb.bot.send_message(cb.message.chat.id, cfg.get_answer("help_json_code"))
 
 
 @router.callback_query(F.data == "homework:mark")
@@ -184,18 +149,7 @@ async def get_homework_mark(cb: CallbackQuery):
 
 @router.callback_query(F.data == "homework:algo")
 async def homework_algo(cb: CallbackQuery):
-    text = (
-        "1. Получить у бота свой вариант ДЗ\n"
-        "2. Решить задачу, сформировав файл с ответами по шаблону\n"
-        "3. Как только бот подтвердил правильность решения - отсылаете отчёт"
-        "преподавателю опять же через меню ДЗ (оно немного изменится "
-        "после прохождения проверки ботом - "
-        "появится кнопка 'Отправить отчёт')\n"
-        "4. Преподаватель выдаёт замечания или принимает работу, "
-        "выставляя оценку. Замечания исправляете, высылаете работу вновь\n"
-        "5. Profit"
-    )
-    await cb.bot.send_message(cb.message.chat.id, text)
+    await cb.bot.send_message(cb.message.chat.id, cfg.get_answer("homework_algo"))
     await cb.answer()
     await cb.message.delete()
 
@@ -221,9 +175,8 @@ async def homework_bot_check(cb: CallbackQuery, state: FSMContext):
     await state.set_state(BotCheckHomework.send_num_solution)
     await state.update_data(sem=sem, student=student, work=work)
 
-    file_type = "YAML" if sem == 1 else "JSON"
     await cb.bot.send_message(
-        cb.message.chat.id, cancel_or(f"Прикрепите файл {file_type} с ответами >>>")
+        cb.message.chat.id, cancel_or("Прикрепите файл JSON с ответами >>>")
     )
 
     await cb.answer()
@@ -242,74 +195,16 @@ async def send_homework2bot(message: Message, state: FSMContext):
 
     sem = data["sem"]
     fname = data["send_file"].file_name.rsplit(".", maxsplit=1)[-1]
-    formats = (
-        {"yaml", "yml"}
-        if sem == 1
-        else {
-            "json",
-        }
-    )
 
-    if fname not in formats:
+    if fname != "json":
         await message.answer(
             "Не тот формат файла: "
             f"`.{message.document.file_name.rsplit('.', 1)[-1]}`. "
-            f"Допустимы следующие форматы: {', '.join(formats)}"
+            "Допустим только формат: json"
         )
         return
 
-    if sem == 1:
-        await _check_yaml(message, data)
-        return
     await _check_json(message, data)
-
-
-async def _check_yaml(message: Message, data: dict):
-    doc = data["send_file"]
-    sem = data["sem"]
-    doc_dir = cfg.get_dir(f"sem_{sem}_yaml_to_check")
-    doc_path = os.path.join(doc_dir, f"{message.from_user.id}.yml")
-    await message.bot.download(doc, doc_path)
-
-    work = data["work"]
-    correct_variant = work.variant
-    with open(doc_path, "r", encoding="utf-8") as f:
-        yaml_data = yaml.safe_load(f)
-    yaml_variant = yaml_data["Информация"]["Вариант"]
-
-    if correct_variant != yaml_variant:
-        await message.answer(
-            f"В файле указан вариант № {yaml_variant}, "
-            f"не совпадающий с выданным вариантом № {correct_variant}. "
-            f"Посмотрите на условие вашего задания"
-        )
-        return
-
-    try:
-        checked = check(doc_path, sem)
-    except ValueError:
-        await message.answer("Файл с ответами не соответствует шаблону")
-        return
-    except:
-        await message.answer(
-            "Упс... Не получилось проверить результаты. Обратитесь к преподавателю"
-        )
-        return
-
-    if not all_right(checked):
-        wrongs = "".join([f" - {w}\n" for w in whats_wrong(checked)])
-        await message.answer(f"{MARK_WRONG} Есть ошибки:\n\n{wrongs}")
-        return
-
-    await rq.approve_homework(data["student"], date.today(), sem)
-
-    await message.answer(
-        f"{MARK_RIGHT} Проверка прошла успешно.\n"
-        "Теперь вы можете отправить преподавателю на проверку "
-        "текстовый отчёт в формате PDF"
-    )
-
-    os.remove(doc_path)
 
 
 async def _check_json(message: Message, data: dict):
@@ -344,7 +239,7 @@ async def _check_json(message: Message, data: dict):
         await message.answer("Файл с ответами не соответствует шаблону")
         return
     except Exception as ex:
-        await message.answer(f"Упс... {ex}")
+        await message.answer(f"Упс... {ex}", parse_mode=None)
         return
 
     if not all_right(checked):
@@ -369,7 +264,7 @@ def check(doc_path: str, sem: int):
 
 
 @router.message(StateFilter(BotCheckHomework), Command("cancel"))
-async def check_homework_yaml_cancel(message: Message, state: FSMContext):
+async def check_homework_cancel(message: Message, state: FSMContext):
     await state.clear()
     await message.answer("Отправка файла ответов отменена")
 
@@ -592,12 +487,4 @@ async def keyboard(message: Message):
 @router.message(F.text.casefold().startswith("о боте"))
 @router.message(Command("about_bot"))
 async def about_bot(message: Message):
-    await message.answer(
-        "Вы как студент можете:\n"
-        "1. Получать варианты ДЗ и описания лабораторных работ.\n"
-        "2. ДЗ предполагает автоматическую проверку ответов ботом. "
-        "После успешной проверки ботом появляется возможность "
-        "отправить отчёт на проверку преподавателем.\n"
-        "3. Просматривать свою текущую успеваемость.\n",
-        reply_markup=kb.student,
-    )
+    await message.answer(cfg.get_answer("about_bot_student"), reply_markup=kb.student)
