@@ -50,7 +50,7 @@ def _check_keys(sol: dict[dict], correct_sol: dict[dict]):
 
 
 def _approx_eq(x, y):
-    eps = cfg.get("rel_float_eq_accuracy")
+    eps = cfg.settings.rel_float_eq_accuracy
     delta = 1e-8
     if isinstance(x, list):
         x, y = np.array(x), np.array(y)

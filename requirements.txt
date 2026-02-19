@@ -8,4 +8,5 @@ aiosqlite
 pandas
 openpyxl
 python-dotenv
+pydantic-settings
 odfpy

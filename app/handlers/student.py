@@ -15,14 +15,11 @@ import app.keyboards.inline as ikb
 import app.keyboards.keyboards as kb
 import config as cfg
 from app.checker import all_right, check_solution_json, whats_wrong
+from app.constants import MARK_RIGHT, MARK_WRONG
 from app.filters import IsStudent
 from app.states import BotCheckHomework, SendHomeworkReport, SendLabReport
 from app.utils.cancel_or import cancel_or
 from app.utils.seasons import get_current_semester, rus_date
-
-MARK_WRONG = "❌"
-MARK_RIGHT = "✅"
-
 
 router = Router()
 router.message.filter(IsStudent())
@@ -102,10 +99,8 @@ async def get_homework_deadline(cb: CallbackQuery):
 @router.callback_query(F.data == "homework:results_template")
 async def get_homework_results_template(cb: CallbackQuery):
     sem = get_current_semester()
-    template_name = (
-        cfg.HWResultsTemplate.HW_1 if sem == 1 else cfg.HWResultsTemplate.HW_2
-    )
-    template_path = cfg.get_file(template_name.value.rsplit(":", maxsplit=1)[-1])
+    hw_file_key = "hw_nozzle_template" if sem == 1 else "hw_wedge_template"
+    template_path = cfg.get_file(hw_file_key)
 
     if not os.path.exists(template_path):
         await cb.message.edit_text(
@@ -115,9 +110,8 @@ async def get_homework_results_template(cb: CallbackQuery):
         return
 
     # Trying to find a cached file
-    file_id = cfg.get_link(template_name)
-    s = await rq.get_student_by_tg(cb.from_user.id)
-    w = await rq.get_homework_of(s, sem)
+    cache_key = f"hw_template_{sem}"
+    file_id = cfg.get_link(cache_key)
     msg = await cb.bot.send_document(
         cb.message.chat.id,
         file_id if file_id else FSInputFile(template_path),
@@ -125,7 +119,7 @@ async def get_homework_results_template(cb: CallbackQuery):
         reply_markup=ikb.hw_results_code,
     )
     if not file_id:
-        cfg.set_link(template_name, msg.document.file_id)
+        cfg.set_link(cache_key, msg.document.file_id)
 
     await cb.answer()
     await cb.message.delete()
@@ -468,22 +462,10 @@ async def labs_actions(cb: CallbackQuery):
 async def lab_description(cb: CallbackQuery):
     lab_i = int(cb.data[-1])
     path = os.path.join(cfg.get_dir(f"labs"), f"lab_{lab_i}.pdf")
-    if lab_i == 1:
-        lab_enum = cfg.Lab.LAB_1
-    elif lab_i == 2:
-        lab_enum = cfg.Lab.LAB_2
-    elif lab_i == 3:
-        lab_enum = cfg.Lab.LAB_3
-    elif lab_i == 4:
-        lab_enum = cfg.Lab.LAB_4
-    elif lab_i == 5:
-        lab_enum = cfg.Lab.LAB_5
-    elif lab_i == 6:
-        lab_enum = cfg.Lab.LAB_6
-    else:
+    if lab_i not in range(1, 7):
         raise ValueError(f"invalid lab work's number {lab_i}")
 
-    doc_id = cfg.get_link(lab_enum)
+    doc_id = cfg.get_link(f"lab_{lab_i}")
     doc = FSInputFile(path, f"ЛР {lab_i}.pdf") if not doc_id else None
 
     try:
@@ -499,7 +481,7 @@ async def lab_description(cb: CallbackQuery):
         return
 
     if not doc_id:
-        cfg.set_link(lab_enum, msg.document.file_id)
+        cfg.set_link(f"lab_{lab_i}", msg.document.file_id)
 
     s = await rq.get_student_by_tg(cb.from_user.id)
     if not await rq.get_lab_of(s, lab_i):

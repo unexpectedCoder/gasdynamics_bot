@@ -1,0 +1,2 @@
+MARK_WRONG = "❌"
+MARK_RIGHT = "✅"

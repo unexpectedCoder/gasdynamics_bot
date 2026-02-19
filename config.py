@@ -1,117 +1,101 @@
-import json
 import os
-from enum import Enum
-from typing import Any
+from pathlib import Path
 
 import yaml
+from pydantic import BaseModel, computed_field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-config: dict[str, Any] = None
-
-files_links: dict[str, dict[str, str]] = None
-bot_speech: dict[str, dict[str, str]] = None
-answers: dict[str, str] = None
+import app.cache as cache
 
 
-def init():
-    global config
-    global bot_speech
-    global answers
-    global files_links
-
-    with open("settings.json", "r") as f:
-        config = json.load(f)
-    config["teachers"] = [int(os.getenv("OWNER_ID"))]
-
-    for d in config["dirs"].values():
-        try:
-            if os.getenv("IN_DOCKER") and d.startswith("/"):
-                os.makedirs(d)
-            else:
-                os.makedirs(os.path.join(*d.split("/")))
-        except OSError as ex:
-            print(ex)
-
-    path = os.path.join(*config["files"]["bot_speech"].split("/"))
-    with open(path, "r", encoding="utf-8") as f:
-        bot_speech = yaml.safe_load(f)
-    answers = bot_speech["answers"]
-
-    files_links = {
-        "labs": {"1": "", "2": "", "3": "", "4": "", "5": "", "6": ""},
-        "json_templates": {"homework_nozzle": "", "homework_shock_wedge": ""},
-        "word_templates": {"homework": "", "labwork": "", "coursework": ""},
-        "video": {
-            "figures": "",
-            "tables": "",
-            "equations": "",
-            "bibliography": "",
-            "code": "",
-        },
-    }
+class Dirs(BaseModel):
+    sem_1_solutions: Path = Path("/vault/solutions/1")
+    sem_2_solutions: Path = Path("/vault/solutions/2")
+    sem_1_json_to_check: Path = Path("/vault/sem_1_json_to_check")
+    sem_2_json_to_check: Path = Path("/vault/sem_2_json_to_check")
+    sem_1_homeworks_to_check: Path = Path("/vault/sem_1_homeworks_to_check")
+    sem_1_checked_homeworks: Path = Path("/vault/sem_1_checked_homeworks")
+    sem_2_homeworks_to_check: Path = Path("/vault/sem_2_homeworks_to_check")
+    sem_2_checked_homeworks: Path = Path("/vault/sem_2_checked_homeworks")
+    labs: Path = Path("/labs")
+    labs_to_check: Path = Path("/vault/labs_to_check")
+    checked_labs: Path = Path("/vault/checked_labs")
+    controls: Path = Path("/vault/controls")
 
 
-def get(key: str):
-    return config.get(key, None)
+class Files(BaseModel):
+    bot_speech: str = "app/files/scratches/bot_speech.yml"
+    hw_nozzle_template: str = "app/files/scratches/hw_nozzle_template.json"
+    hw_wedge_template: str = "app/files/scratches/hw_wedge_template.json"
+    home_nozzle: str = "app/files/home_nozzle.json"
+    home_shock_wedge: str = "app/files/home_shock_wedge.json"
+    files_links: str = "files_links.json"
+    students: str = "secrets/students.json"
 
 
-def get_dir(key: str):
-    dirs = config["dirs"]
-    if os.getenv("IN_DOCKER") and dirs[key].startswith("/"):
-        return os.path.join("/", *dirs[key].split("/"))
-    return os.path.join(*dirs[key].split("/"))
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file="secrets/.env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # Из .env
+    token: str
+    owner_id: int
+    in_docker: bool = False
+
+    # Числовые настройки
+    rel_float_eq_accuracy: float = 0.001
+
+    # Пути (могут быть переопределены через env-переменные вида DIRS__LABS=...)
+    dirs: Dirs = Dirs()
+    files: Files = Files()
+
+    @computed_field
+    @property
+    def teachers(self) -> list[int]:
+        return [self.owner_id]
 
 
-def get_file(key: str):
-    files = config["files"]
-    return os.path.join(*files[key].split("/"))
+settings = Settings()
 
 
-def get_answer(handler_name: str):
-    return answers.get(handler_name, None)
+def get_dir(key: str) -> str:
+    raw = getattr(settings.dirs, key)
+    if settings.in_docker and raw.startswith("/"):
+        return os.path.join("/", *raw.split("/"))
+    return os.path.join(*raw.split("/"))
 
 
-class Lab(Enum):
-    LAB_1 = "labs:1"
-    LAB_2 = "labs:2"
-    LAB_3 = "labs:3"
-    LAB_4 = "labs:4"
-    LAB_5 = "labs:5"
-    LAB_6 = "labs:6"
+def get_file(key: str) -> str:
+    raw = getattr(settings.files, key)
+    return os.path.join(*raw.split("/"))
 
 
-class HWResultsTemplate(Enum):
-    HW_1 = "json_templates:hw_nozzle_template"
-    HW_2 = "json_templates:hw_wedge_template"
+def get_answer(handler_name: str) -> str | None:
+    return cache.answers.get(handler_name)
 
 
-class WordTemplate(Enum):
-    HOMEWORK = "word_templates:homework"
-    LABWORK = "word_templates:labwork"
-    COURSEWORK = "word_templates:coursework"
+def get_link(key: str) -> str | None:
+    return cache.files_links.get(key)
 
 
-class Video(Enum):
-    FIGURES = "video:figures"
-    TABLES = "video:tables"
-    EQUATIONS_WORD = "video:equations_word"
-    EQUATIONS_MATHTYPE = "video:equations_mathtype"
-    BIBLIOGRAPHY = "video:bibliography"
-    CODE = "video:code"
+def set_link(key: str, link: str):
+    cache.files_links[key] = link
 
 
-AnyConfEnum = Lab | WordTemplate | HWResultsTemplate | Video
+# Startup
+for _key in settings.dirs.model_fields:
+    _raw = getattr(settings.dirs, _key)
+    try:
+        if settings.in_docker and _raw.startswith("/"):
+            os.makedirs(_raw, exist_ok=True)
+        else:
+            os.makedirs(os.path.join(*_raw.split("/")), exist_ok=True)
+    except OSError as ex:
+        print(ex)
 
-
-def get_link(tmpl: AnyConfEnum):
-    section, filename = tmpl.value.rsplit(":", maxsplit=1)
-    return files_links[section].get(filename, None)
-
-
-def set_link(tmpl: AnyConfEnum, link: str):
-    global files_links
-    section, filename = tmpl.value.rsplit(":", maxsplit=1)
-    files_links[section][filename] = link
-
-
-if __name__ == "__main__":
-    init()
+with open(get_file("bot_speech"), "r", encoding="utf-8") as f:
+    cache.bot_speech = yaml.safe_load(f)
+cache.answers = cache.bot_speech["answers"]
