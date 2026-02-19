@@ -9,8 +9,8 @@ import app.cache as cache
 
 
 class Dirs(BaseModel):
-    sem_1_solutions: Path = Path("/vault/solutions/1")
-    sem_2_solutions: Path = Path("/vault/solutions/2")
+    sem_1_solutions: Path = Path("solutions/1")
+    sem_2_solutions: Path = Path("solutions/2")
     sem_1_json_to_check: Path = Path("/vault/sem_1_json_to_check")
     sem_2_json_to_check: Path = Path("/vault/sem_2_json_to_check")
     sem_1_homeworks_to_check: Path = Path("/vault/sem_1_homeworks_to_check")
