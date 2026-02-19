@@ -26,6 +26,7 @@ from app.states import (
     HomeworkDeadline,
     RemoveStudent,
 )
+from app.utils.cancel_or import cancel_or
 from app.utils.seasons import get_current_semester
 
 router = Router()
@@ -80,9 +81,10 @@ async def check_homework(cb: CallbackQuery, state: FSMContext):
     await cb.bot.send_document(
         cb.message.chat.id,
         doc,
-        caption=f"Проверьте ДЗ вар. № {hw.variant} "
-        f"(выполнил(а) {name}, {s.group}) и выберите действие 👇"
-        "\n/cancel",
+        caption=cancel_or(
+            f"Проверьте ДЗ вар. № {hw.variant} "
+            f"(выполнил(а) {name}, {s.group}) и выберите действие 👇"
+        ),
         reply_markup=ikb.homework_approve_or_remark,
     )
 
@@ -94,9 +96,10 @@ async def remark_homework(cb: CallbackQuery, state: FSMContext):
     await state.set_state(AssessHomework.remarking)
     await cb.bot.send_message(
         cb.message.chat.id,
-        "Напишите замечания или прикрепите файл с ними >>>\n\n"
-        "_это сообщение будет переслано студенту_\n"
-        "/cancel",
+        cancel_or(
+            "Напишите замечания или прикрепите файл с ними "
+            "(это сообщение будет переслано студенту) >>>"
+        ),
     )
     await cb.answer()
     await cb.message.delete()
@@ -138,10 +141,10 @@ async def approve_homework(cb: CallbackQuery, state: FSMContext):
     deadline = data["homework"].deadline
     if deadline and date.today() > deadline:
         await cb.bot.send_message(
-            cb.message.chat.id, "Оцените работу (сдана с опозданием) >>>\n/cancel"
+            cb.message.chat.id, cancel_or("Оцените работу (сдана с опозданием) >>>")
         )
     else:
-        await cb.bot.send_message(cb.message.chat.id, "Оцените работу >>>\n/cancel")
+        await cb.bot.send_message(cb.message.chat.id, cancel_or("Оцените работу >>>"))
 
     await state.set_state(AssessHomework.approving)
     await cb.answer()
@@ -197,7 +200,7 @@ async def cancel_homework_assess(message: Message, state: FSMContext):
 async def set_homework_deadline(cb: CallbackQuery, state: FSMContext):
     await state.set_state(HomeworkDeadline.enter_date)
     await cb.message.edit_text(
-        "Введите дату сдачи ДЗ в формате `дд.мм.гггг` >>>\n/cancel"
+        cancel_or("Введите дату сдачи ДЗ в формате `дд.мм.гггг` >>>")
     )
 
 
@@ -247,7 +250,9 @@ async def exam_controlling(cb: CallbackQuery, state: FSMContext):
     await cb.bot.send_document(
         cb.message.chat.id,
         doc,
-        caption="Проставьте РК в присланном файле и пришлите его обратно >>>\n/cancel",
+        caption=cancel_or(
+            "Проставьте РК в присланном файле и пришлите его обратно >>>"
+        ),
     )
 
     await state.set_state(ControlsChecking.send_excel)
@@ -326,7 +331,7 @@ async def check_lab(cb: CallbackQuery, state: FSMContext):
     await cb.bot.send_document(
         cb.message.chat.id,
         doc,
-        caption="Проверьте отчёт и выберите действие >>>\n/cancel",
+        caption=cancel_or("Проверьте отчёт и выберите действие >>>"),
         reply_markup=ikb.labs_approve_or_remark,
     )
 
@@ -339,9 +344,10 @@ async def lab_remarks(cb: CallbackQuery, state: FSMContext):
     await state.set_state(AssessLab.remark)
     await cb.bot.send_message(
         cb.message.chat.id,
-        "Напишите замечания или прикрепите файл с ними >>>\n\n"
-        "_это сообщение будет переслано студенту_\n"
-        "/cancel",
+        cancel_or(
+            "Напишите замечания или прикрепите файл с ними "
+            "(это сообщение будет переслано студенту) >>>"
+        ),
     )
     await cb.answer()
 
@@ -378,7 +384,7 @@ async def send_lab_remark(message: Message, state: FSMContext):
 async def approve_lab(cb: CallbackQuery, state: FSMContext):
     await state.set_state(AssessLab.approve)
     await cb.bot.send_message(
-        cb.message.chat.id, "Оцените выполнение ЛР по пятибалльной шкале >>>\n/cancel"
+        cb.message.chat.id, cancel_or("Оцените выполнение ЛР по пятибалльной шкале >>>")
     )
     await cb.answer()
     await cb.message.delete()
@@ -453,7 +459,8 @@ async def add_lab_n(cb: CallbackQuery, state: FSMContext):
         await state.set_state(AddLab.send_file)
         await cb.message.delete()
         await cb.bot.send_message(
-            cb.message.chat.id, f"Прикрепите PDF-файл ЛР № {lab_n} (до 10 МБ):\n/cancel"
+            cb.message.chat.id,
+            cancel_or(f"Прикрепите PDF-файл ЛР № {lab_n} (до 10 МБ):"),
         )
 
     await cb.answer()
@@ -462,7 +469,7 @@ async def add_lab_n(cb: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "labs:replace", AddLab.lab_exists)
 async def confirm_replace_lab(cb: CallbackQuery, state: FSMContext):
     await state.set_state(AddLab.send_file)
-    await cb.message.edit_text("Прикрепите файл >>>\n/cancel")
+    await cb.message.edit_text(cancel_or("Прикрепите файл >>>"))
     await cb.answer()
 
 
@@ -569,7 +576,7 @@ async def students_list(cb: CallbackQuery):
 @router.callback_query(F.data == "students:add", default_state)
 async def add_student(cb: CallbackQuery, state: FSMContext):
     await state.set_state(AddStudent.name)
-    await cb.message.edit_text("ФИО студента >>>\n/cancel")
+    await cb.message.edit_text(cancel_or("ФИО студента >>>"))
     await cb.answer()
 
 
@@ -584,7 +591,7 @@ async def give_student_name(message: Message, state: FSMContext):
     ln, fn, mn = message.text.title().split()
     await state.update_data(firstname=fn, middlename=mn, lastname=ln)
     await state.set_state(AddStudent.group)
-    await message.answer("Группа >>>\n/cancel")
+    await message.answer(cancel_or("Группа >>>"))
 
 
 @router.message(AddStudent.group, F.text.casefold().regexp(r"^см6-\d{2,3}$"))
@@ -592,7 +599,7 @@ async def give_student_group(message: Message, state: FSMContext):
     group = message.text.upper()
     await state.update_data(group=group)
     await state.set_state(AddStudent.mark_book)
-    await message.answer("Номер зачётки >>>\n/cancel")
+    await message.answer(cancel_or("Номер зачётки >>>"))
 
 
 @router.message(AddStudent.mark_book, F.text.regexp(r"^\d{2}М\d{3}$"))
@@ -618,7 +625,7 @@ async def add_student_cancel(message: Message, state: FSMContext):
 @router.callback_query(F.data == "students:remove", default_state)
 async def remove_student(cb: CallbackQuery, state: FSMContext):
     await state.set_state(RemoveStudent.mark_book)
-    await cb.message.edit_text("Номер зачётной книжки >>>\n/cancel")
+    await cb.message.edit_text(cancel_or("Номер зачётной книжки >>>"))
     await cb.answer()
 
 

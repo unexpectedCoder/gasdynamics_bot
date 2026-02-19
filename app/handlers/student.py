@@ -17,6 +17,7 @@ import config as cfg
 from app.checker import all_right, check_solution_json, check_solution_yaml, whats_wrong
 from app.filters import IsStudent
 from app.states import BotCheckHomework, SendHomeworkReport, SendLabReport
+from app.utils.cancel_or import cancel_or
 from app.utils.seasons import get_current_semester, rus_date
 
 MARK_WRONG = "❌"
@@ -228,7 +229,7 @@ async def homework_bot_check(cb: CallbackQuery, state: FSMContext):
 
     file_type = "YAML" if sem == 1 else "JSON"
     await cb.bot.send_message(
-        cb.message.chat.id, f"Прикрепите файл {file_type} с ответами >>>\n/cancel"
+        cb.message.chat.id, cancel_or(f"Прикрепите файл {file_type} с ответами >>>")
     )
 
     await cb.answer()
@@ -400,7 +401,7 @@ async def send_homework_report(cb: CallbackQuery, state: FSMContext):
     await state.update_data(student=s, work=w, sem=sem)
     await cb.bot.send_message(
         cb.message.chat.id,
-        "Прикрепите файл отчёта в формате PDF >>>\n/cancel",
+        cancel_or("Прикрепите файл отчёта в формате PDF >>>"),
     )
 
     await cb.answer()
@@ -520,7 +521,7 @@ async def send_lab(cb: CallbackQuery, state: FSMContext):
     lab_i = int(cb.data[-1])
     await state.set_state(SendLabReport.send_pdf)
     await state.update_data(student_tg=cb.from_user.id, lab_i=lab_i)
-    await cb.bot.send_message(cb.message.chat.id, "Прикрепите PDF-файл >>>\n/cancel")
+    await cb.bot.send_message(cb.message.chat.id, cancel_or("Прикрепите PDF-файл >>>"))
     await cb.answer()
     await cb.message.delete()
 

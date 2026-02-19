@@ -8,6 +8,7 @@ import app.database.requests as rq
 import app.keyboards.keyboards as kb
 from app.filters import IsDefaultUser
 from app.states import Registration
+from app.utils.cancel_or import cancel_or
 
 router = Router()
 router.message.filter(IsDefaultUser())
@@ -18,8 +19,10 @@ router.message.filter(IsDefaultUser())
 async def reg_handler(message: Message, state: FSMContext):
     await state.set_state(Registration.mark_book)
     await message.answer(
-        "Пожалуйста, введите номер своей зачётной книжки "
-        "(кириллицей и с учётом регистра). Например, 17М235 >>>\n/cancel"
+        cancel_or(
+            "Пожалуйста, введите номер своей зачётной книжки "
+            "(кириллицей и с учётом регистра). Например, 17М235 >>>"
+        )
     )
 
 
