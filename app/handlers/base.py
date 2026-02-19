@@ -8,7 +8,6 @@ import app.database.requests as rq
 import app.keyboards.keyboards as kb
 from app.handlers.registration import router as reg_router
 
-
 router = Router()
 router.include_router(reg_router)
 
@@ -21,31 +20,29 @@ async def start_handler(message: Message):
     teacher = await rq.get_teacher_by_tg(user_id)
     if teacher is not None:
         name = f"{teacher.firstname} {teacher.middlename}"
-        await message.answer(
-            f"Приветствую вас, {name}", reply_markup=kb.teacher
-        )
+        await message.answer(f"Приветствую вас, {name}", reply_markup=kb.teacher)
         return
-    
+
     # Для зареганых студентов
     student = await rq.get_student_by_tg(user_id)
     if student is not None:
         name = f"{student.firstname} {student.lastname}"
         await message.answer(f"Приветствую, {name}", reply_markup=kb.student)
         return
-    
+
     # Если пользователь не зареган
     await message.answer(
-        "Приветствую, юзернейм!\n"
+        f"Приветствую, {message.from_user.first_name}!\n"
         "Для получения доступа к моим функциям необходимо зарегистрироваться. "
-        "Сделать это можно командой /reg или соответствующей кнопкой",
-        reply_markup=kb.default_user
+        "Сделать это можно командой /reg или соответствующей кнопкой.",
+        reply_markup=kb.default_user,
     )
 
 
 @router.message(default_state, Command("cancel"))
 async def cancel_no_state(message: Message, state: FSMContext):
     await state.set_data({})
-    await message.answer("Нечего отменять")
+    await message.answer("Нечего отменять...")
 
 
 @router.message(Command("about_bot"))
@@ -53,7 +50,8 @@ async def cancel_no_state(message: Message, state: FSMContext):
 async def about_bot_handler(message: Message):
     await message.answer(
         "Бот предназначен для автоматизации проверки и учёта контрольных "
-        "мероприятий, выполняемых студентами, а также для контроля " "успеваемости. Более подробная информация доступна после регистрации "
+        "мероприятий, выполняемых студентами, а также для контроля "
+        "успеваемости. Более подробная информация доступна после регистрации "
         "при использовании соответствующих функций"
     )
 

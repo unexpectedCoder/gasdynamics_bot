@@ -6,9 +6,8 @@ from aiogram.types import Message
 
 import app.database.requests as rq
 import app.keyboards.keyboards as kb
-from app.states import Registration
 from app.filters import IsDefaultUser
-
+from app.states import Registration
 
 router = Router()
 router.message.filter(IsDefaultUser())
@@ -20,7 +19,7 @@ async def reg_handler(message: Message, state: FSMContext):
     await state.set_state(Registration.mark_book)
     await message.answer(
         "Пожалуйста, введите номер своей зачётной книжки "
-        "(кириллицей и с учётом регистра). Например, 17М235 (/cancel):"
+        "(кириллицей и с учётом регистра). Например, 17М235 >>>\n/cancel"
     )
 
 
@@ -37,16 +36,16 @@ async def reg_mark_book(message: Message, state: FSMContext):
             "Проверьте правильность номера зачётной книжки "
             "и попробуйте ещё раз зарегистрироваться (/reg) "
             "или обратитесь к преподавателю",
-            reply_markup=kb.default_user
+            reply_markup=kb.default_user,
         )
         return
-    
+
     student.tg_id = message.from_user.id
     await rq.reg_student(student)
     await message.answer(
         f"Вы успешно зарегистрированы как студент группы {student.group} "
         f"{student.firstname} {student.lastname}",
-        reply_markup=kb.student
+        reply_markup=kb.student,
     )
 
 

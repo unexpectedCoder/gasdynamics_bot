@@ -1,11 +1,9 @@
 import os
 from enum import Enum
-from sqlalchemy import BigInteger, Date, ForeignKey, String
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy.ext.asyncio import (
-    AsyncAttrs, async_sessionmaker, create_async_engine
-)
 
+from sqlalchemy import BigInteger, Date, ForeignKey, String
+from sqlalchemy.ext.asyncio import AsyncAttrs, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 db_dir = "db_data"
 if os.getenv("IN_DOCKER"):
@@ -53,10 +51,12 @@ class Student(Base):
     def __str__(self):
         name = self.get_name()
         if self.tg_id:
-            return f"{self.group} [{name}](tg://user?id={self.tg_id}) " \
-                "(зачётка {self.mark_book})"
+            return (
+                f"{self.group} [{name}](tg://user?id={self.tg_id}) "
+                f"(зачётка {self.mark_book})"
+            )
         return f"{self.group} {name} (зачётка {self.mark_book})"
-    
+
     def get_name(self):
         return f"{self.lastname} {self.firstname} {self.middlename}"
 
@@ -119,24 +119,33 @@ class HomeworkNozzle(Base):
     def __str__(self):
         head = f"Вариант ДЗ - {self.variant}:\n"
 
-        p0 = "  - давление в камере " \
-            f"_p_₀ = {round(float(self.p0)*1e-6, 2)} МПа;\n"
+        p0 = f"  - давление в камере _p_₀ = {round(float(self.p0) * 1e-6, 2)} МПа;\n"
         T0 = f"  - температура в камере _T_₀ = {self.T0} К;\n"
         R = f"  - газовая постоянная _R_ = {self.R} Дж/(кг К);\n"
         k = f"  - показатель адиабаты _k_ = {self.k};\n"
-        d_critic = \
-            f"  - диаметр критического сечения _d_\* = {self.d_critic} м;\n"
-        area_ratio = \
-            f"  - отношение площадей выходного и критического сечений " \
+        d_critic = f"  - диаметр критического сечения _d_\* = {self.d_critic} м;\n"
+        area_ratio = (
+            f"  - отношение площадей выходного и критического сечений "
             f"ν = {self.area_ratio};\n"
-        d_chamber = \
-            f"  - диаметр камеры сгорания _D_\_к = {self.d_chamber} м;\n"
+        )
+        d_chamber = f"  - диаметр камеры сгорания _D_\_к = {self.d_chamber} м;\n"
         alpha = f"  - угол сужения конфузора α = {self.alpha}°;\n"
         beta = f"  - угол расширения диффузора β = {self.beta}°;\n"
         propel_mass = f"  - относительная масса топлива μ = {self.rel_propel_mass}."
 
-        return head + p0 + T0 + R + k + d_critic + area_ratio + \
-            d_chamber + alpha + beta + propel_mass
+        return (
+            head
+            + p0
+            + T0
+            + R
+            + k
+            + d_critic
+            + area_ratio
+            + d_chamber
+            + alpha
+            + beta
+            + propel_mass
+        )
 
 
 class HomeworkShockWedge(Base):
@@ -176,7 +185,7 @@ class Lab_1(Base):
     __tablename__ = "lab_1"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    
+
     student_id: Mapped[int] = mapped_column(
         ForeignKey("students.id"), unique=True, nullable=True
     )
@@ -190,7 +199,7 @@ class Lab_2(Base):
     __tablename__ = "lab_2"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    
+
     student_id: Mapped[int] = mapped_column(
         ForeignKey("students.id"), unique=True, nullable=True
     )
@@ -204,7 +213,7 @@ class Lab_3(Base):
     __tablename__ = "lab_3"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    
+
     student_id: Mapped[int] = mapped_column(
         ForeignKey("students.id"), unique=True, nullable=True
     )
@@ -218,7 +227,7 @@ class Lab_4(Base):
     __tablename__ = "lab_4"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    
+
     student_id: Mapped[int] = mapped_column(
         ForeignKey("students.id"), unique=True, nullable=True
     )
@@ -232,7 +241,7 @@ class Lab_5(Base):
     __tablename__ = "lab_5"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    
+
     student_id: Mapped[int] = mapped_column(
         ForeignKey("students.id"), unique=True, nullable=True
     )
@@ -246,7 +255,7 @@ class Lab_6(Base):
     __tablename__ = "lab_6"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    
+
     student_id: Mapped[int] = mapped_column(
         ForeignKey("students.id"), unique=True, nullable=True
     )
@@ -271,7 +280,7 @@ LABS_TYPES = {
     Labs.LAB_3.value: Lab_3,
     Labs.LAB_4.value: Lab_4,
     Labs.LAB_5.value: Lab_5,
-    Labs.LAB_6.value: Lab_6
+    Labs.LAB_6.value: Lab_6,
 }
 
 

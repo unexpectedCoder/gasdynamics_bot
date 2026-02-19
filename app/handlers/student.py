@@ -1,5 +1,7 @@
 import json
 import os
+from datetime import date
+
 import yaml
 from aiogram import F, Router
 from aiogram.filters import Command, StateFilter
@@ -7,19 +9,15 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import default_state
 from aiogram.types import CallbackQuery, FSInputFile, Message
 from aiogram.utils.chat_action import ChatActionMiddleware
-from datetime import date
 
 import app.database.requests as rq
 import app.keyboards.inline as ikb
 import app.keyboards.keyboards as kb
 import config as cfg
-from app.checker import (
-    all_right, check_solution_json, check_solution_yaml, whats_wrong
-)
+from app.checker import all_right, check_solution_json, check_solution_yaml, whats_wrong
 from app.filters import IsStudent
-from app.states import BotCheckHomework, SendLabReport, SendHomeworkReport
+from app.states import BotCheckHomework, SendHomeworkReport, SendLabReport
 from app.utils.seasons import get_current_semester, rus_date
-
 
 MARK_WRONG = "❌"
 MARK_RIGHT = "✅"
@@ -43,25 +41,28 @@ async def homework(message: Message):
 @router.callback_query(F.data == "homework:get")
 async def get_homework(cb: CallbackQuery):
     user_id = cb.from_user.id
-    s = await rq.get_student_by_tg(user_id)
+    student = await rq.get_student_by_tg(user_id)
     sem = get_current_semester()
-    w = await rq.get_homework_of(s, sem)
+    work = await rq.get_homework_of(student, sem)
 
-    if w:
-        await cb.message.edit_text(f"Вам уже выдан вариант ДЗ № {w.variant}")
+    if work:
+        await cb.message.edit_text(f"Вам уже выдан вариант ДЗ № {work.variant}")
         await cb.answer()
         return
-    if not w:
+
+    free = await rq.get_free_homework(sem)
+    if not free:
         await cb.message.edit_text(
-            "Домашних заданий не осталось, обратитесь к преподавателю"
+            "Свободных вариантов ДЗ не осталось, обратитесь к преподавателю..."
         )
         await cb.answer()
         return
 
-    await rq.set_homework(s, w)
+    await rq.set_homework(student, free)
     await cb.bot.send_message(
         cb.message.chat.id,
-        f"Ваше ДЗ:\n\n{str(w)}", reply_markup=ikb.homework_builder(False)
+        f"Ваше ДЗ:\n\n{str(free)}",
+        reply_markup=ikb.homework_builder(False),
     )
 
     await cb.message.delete()
@@ -71,7 +72,7 @@ async def get_homework(cb: CallbackQuery):
 @router.callback_query(F.data == "homework:description")
 async def get_homework_description(cb: CallbackQuery):
     await cb.message.delete()
-    
+
     sem = get_current_semester()
     hw_theme = "homework_nozzle" if sem == 1 else "homework_shock_wedge"
     answer = cfg.get_answer(hw_theme)
@@ -100,11 +101,10 @@ async def get_homework_deadline(cb: CallbackQuery):
 @router.callback_query(F.data == "homework:results_template")
 async def get_homework_results_template(cb: CallbackQuery):
     sem = get_current_semester()
-    template_name = \
+    template_name = (
         cfg.HWResultsTemplate.HW_1 if sem == 1 else cfg.HWResultsTemplate.HW_2
-    template_path = cfg.get_file(
-        template_name.value.rsplit(":", maxsplit=1)[-1]
     )
+    template_path = cfg.get_file(template_name.value.rsplit(":", maxsplit=1)[-1])
 
     if not os.path.exists(template_path):
         await cb.message.edit_text(
@@ -112,7 +112,7 @@ async def get_homework_results_template(cb: CallbackQuery):
         )
         await cb.answer()
         return
-    
+
     # Trying to find a cached file
     file_id = cfg.get_link(template_name)
     s = await rq.get_student_by_tg(cb.from_user.id)
@@ -121,11 +121,11 @@ async def get_homework_results_template(cb: CallbackQuery):
         cb.message.chat.id,
         file_id if file_id else FSInputFile(template_path),
         caption=cfg.get_answer("help_yaml"),
-        reply_markup=ikb.hw_results_code
+        reply_markup=ikb.hw_results_code,
     )
     if not file_id:
         cfg.set_link(template_name, msg.document.file_id)
-    
+
     await cb.answer()
     await cb.message.delete()
 
@@ -135,40 +135,38 @@ async def get_homework_template_code(cb: CallbackQuery):
     await cb.answer()
     sem = get_current_semester()
     if sem == 1:
-        await cb.bot.send_message(
-            cb.message.chat.id, cfg.get_answer("help_pyyaml")
-        )
+        await cb.bot.send_message(cb.message.chat.id, cfg.get_answer("help_pyyaml"))
         return
     await cb.bot.send_message(
         cb.message.chat.id,
-        '```python\n'
-        'import json\n\n'
+        "```python\n"
+        "import json\n\n"
         'with open("results.json", "w", encoding="utf-8") as f:\n'
-        '    json.dump(solution, f, indent=4, ensure_ascii=False)\n'
-        '```'
-        'Здесь `solution` является словарём с требуемой структурой, совпадающей со структурой JSON-файла с ответами:'
-        '```python\n'
-        'import numpy as np\n\n'
-        'solution = {\n'
+        "    json.dump(solution, f, indent=4, ensure_ascii=False)\n"
+        "```"
+        "Здесь `solution` является словарём с требуемой структурой, совпадающей со структурой JSON-файла с ответами:"
+        "```python\n"
+        "import numpy as np\n\n"
+        "solution = {\n"
         '    "Информация": {\n'
         '        "Вариант": 0,\n'
         '        "Скорость набегающего потока, число Маха": mach_0,\n'
         '        "Углы клина, градус": [\n'
-        '            np.degrees(beta_1),\n'
-        '            np.degrees(beta_2),\n'
-        '            np.degrees(beta_3)\n'
-        '        ]\n'
-        '    },\n'
+        "            np.degrees(beta_1),\n"
+        "            np.degrees(beta_2),\n"
+        "            np.degrees(beta_3)\n"
+        "        ]\n"
+        "    },\n"
         '    "1": {\n'
         '        "Скорость потока, число Маха": [\n'
-        '            mach_0,\n'
-        '            mach_1,\n'
-        '            mach_2,\n'
-        '            mach_3\n'
-        '        ],\n'
-        '    и т. д.\n'
+        "            mach_0,\n"
+        "            mach_1,\n"
+        "            mach_2,\n"
+        "            mach_3\n"
+        "        ],\n"
+        "    и т. д.\n"
         "```\n"
-        'При расчёте сначала формируете словарь `solution`, записывая в него значения соответствующих переменных, и в конце расчётов сохраняете его в файл JSON. Всё полностью аналогично работе с файлами YAML.\n\n Сформированный таким образом JSON-файл отправляете на проверку боту'
+        "При расчёте сначала формируете словарь `solution`, записывая в него значения соответствующих переменных, и в конце расчётов сохраняете его в файл JSON. Всё полностью аналогично работе с файлами YAML.\n\n Сформированный таким образом JSON-файл отправляете на проверку боту",
     )
 
 
@@ -191,16 +189,17 @@ async def get_homework_mark(cb: CallbackQuery):
 
 @router.callback_query(F.data == "homework:algo")
 async def homework_algo(cb: CallbackQuery):
-    text = \
-        "1. Получить у бота свой вариант ДЗ\n" \
-        "2. Решить задачу, сформировав файл с ответами по шаблону\n" \
-        "3. Как только бот подтвердил правильность решения - отсылаете отчёт" \
-        "преподавателю опять же через меню ДЗ (оно немного изменится " \
-        "после прохождения проверки ботом - " \
-        "появится кнопка 'Отправить отчёт')\n" \
-        "4. Преподаватель выдаёт замечания или принимает работу, " \
-        "выставляя оценку. Замечания исправляете, высылаете работу вновь\n" \
+    text = (
+        "1. Получить у бота свой вариант ДЗ\n"
+        "2. Решить задачу, сформировав файл с ответами по шаблону\n"
+        "3. Как только бот подтвердил правильность решения - отсылаете отчёт"
+        "преподавателю опять же через меню ДЗ (оно немного изменится "
+        "после прохождения проверки ботом - "
+        "появится кнопка 'Отправить отчёт')\n"
+        "4. Преподаватель выдаёт замечания или принимает работу, "
+        "выставляя оценку. Замечания исправляете, высылаете работу вновь\n"
         "5. Profit"
+    )
     await cb.bot.send_message(cb.message.chat.id, text)
     await cb.answer()
     await cb.message.delete()
@@ -229,8 +228,7 @@ async def homework_bot_check(cb: CallbackQuery, state: FSMContext):
 
     file_type = "YAML" if sem == 1 else "JSON"
     await cb.bot.send_message(
-        cb.message.chat.id,
-        f"Прикрепите файл {file_type} с ответами >>>\n/cancel"
+        cb.message.chat.id, f"Прикрепите файл {file_type} с ответами >>>\n/cancel"
     )
 
     await cb.answer()
@@ -246,11 +244,17 @@ async def send_homework2bot(message: Message, state: FSMContext):
     if not data["send_file"]:
         await message.answer("Вы не прикрепили документ")
         return
-    
+
     sem = data["sem"]
     fname = data["send_file"].file_name.rsplit(".", maxsplit=1)[-1]
-    formats = {"yaml", "yml"} if sem == 1 else {"json",}
-    
+    formats = (
+        {"yaml", "yml"}
+        if sem == 1
+        else {
+            "json",
+        }
+    )
+
     if fname not in formats:
         await message.answer(
             "Не тот формат файла: "
@@ -258,7 +262,7 @@ async def send_homework2bot(message: Message, state: FSMContext):
             f"Допустимы следующие форматы: {', '.join(formats)}"
         )
         return
-    
+
     if sem == 1:
         await _check_yaml(message, data)
         return
@@ -277,7 +281,7 @@ async def _check_yaml(message: Message, data: dict):
     with open(doc_path, "r", encoding="utf-8") as f:
         yaml_data = yaml.safe_load(f)
     yaml_variant = yaml_data["Информация"]["Вариант"]
-    
+
     if correct_variant != yaml_variant:
         await message.answer(
             f"В файле указан вариант № {yaml_variant}, "
@@ -289,22 +293,19 @@ async def _check_yaml(message: Message, data: dict):
     try:
         checked = check(doc_path, sem)
     except ValueError:
-        await message.answer(
-            "Файл с ответами не соответствует шаблону"
-        )
+        await message.answer("Файл с ответами не соответствует шаблону")
         return
     except:
         await message.answer(
-            "Упс... "
-            "Не получилось проверить результаты. Обратитесь к преподавателю"
+            "Упс... Не получилось проверить результаты. Обратитесь к преподавателю"
         )
         return
-    
+
     if not all_right(checked):
         wrongs = "".join([f" - {w}\n" for w in whats_wrong(checked)])
         await message.answer(f"{MARK_WRONG} Есть ошибки:\n\n{wrongs}")
         return
-    
+
     await rq.approve_homework(data["student"], date.today(), sem)
 
     await message.answer(
@@ -332,7 +333,7 @@ async def _check_json(message: Message, data: dict):
     correct_variant = work.variant
     with open(doc_path, "r", encoding="utf-8") as f:
         json_data = json.load(f)
-    
+
     json_variant = json_data["Информация"]["Вариант"]
     if correct_variant != json_variant:
         await message.answer(
@@ -345,19 +346,17 @@ async def _check_json(message: Message, data: dict):
     try:
         checked = check(doc_path, sem)
     except ValueError:
-        await message.answer(
-            "Файл с ответами не соответствует шаблону"
-        )
+        await message.answer("Файл с ответами не соответствует шаблону")
         return
     except Exception as ex:
         await message.answer(f"Упс... {ex}")
         return
-    
+
     if not all_right(checked):
-        wrongs = "".join([f" - {w}\n" for w in whats_wrong(checked)[:-1]])
+        wrongs = "".join([f" - {w}\n" for w in whats_wrong(checked)])
         await message.answer(f"{MARK_WRONG} Есть ошибки:\n\n{wrongs}")
         return
-    
+
     await rq.approve_homework(data["student"], date.today(), sem)
 
     await message.answer(
@@ -400,7 +399,8 @@ async def send_homework_report(cb: CallbackQuery, state: FSMContext):
     await state.set_state(SendHomeworkReport.send_pdf)
     await state.update_data(student=s, work=w, sem=sem)
     await cb.bot.send_message(
-        cb.message.chat.id, "Прикрепите файл отчёта в формате PDF >>>\n/cancel",
+        cb.message.chat.id,
+        "Прикрепите файл отчёта в формате PDF >>>\n/cancel",
     )
 
     await cb.answer()
@@ -417,7 +417,7 @@ async def send_homework_report_pdf(message: Message, state: FSMContext):
     if not doc.file_name.endswith(".pdf"):
         await message.answer("Не тот формат отчёта: требуется `.pdf`")
         return
-    
+
     await _process_homework_report(message, data)
 
 
@@ -425,8 +425,7 @@ async def _process_homework_report(message: Message, data: dict):
     doc = data["send_file"]
     sem = data["sem"]
     doc_path = os.path.join(
-        cfg.get_dir(f"sem_{sem}_homeworks_to_check"),
-        f"{message.from_user.id}.pdf"
+        cfg.get_dir(f"sem_{sem}_homeworks_to_check"), f"{message.from_user.id}.pdf"
     )
     await message.bot.download(doc, doc_path)
 
@@ -440,7 +439,7 @@ async def _process_homework_report(message: Message, data: dict):
 
     await message.bot.send_message(
         os.getenv("OWNER_ID"),
-        f"{s.get_name()} прислал(а) на проверку отчёт по ДЗ вар. № {w.variant}"
+        f"{s.get_name()} прислал(а) на проверку отчёт по ДЗ вар. № {w.variant}",
     )
 
 
@@ -461,8 +460,7 @@ async def labs(message: Message):
 async def labs_actions(cb: CallbackQuery):
     lab_i = int(cb.data[-1])
     await cb.message.edit_text(
-        f"Выберите действие с ЛР № {lab_i} 👇",
-        reply_markup=ikb.labs_action(lab_i)
+        f"Выберите действие с ЛР № {lab_i} 👇", reply_markup=ikb.labs_action(lab_i)
     )
     await cb.answer()
 
@@ -485,15 +483,13 @@ async def lab_description(cb: CallbackQuery):
         lab_enum = cfg.Lab.LAB_6
     else:
         raise ValueError(f"invalid lab work's number {lab_i}")
-    
+
     doc_id = cfg.get_link(lab_enum)
     doc = FSInputFile(path, f"ЛР {lab_i}.pdf") if not doc_id else None
 
     try:
         msg = await cb.bot.send_document(
-            cb.message.chat.id,
-            doc if doc else doc_id,
-            caption=f"Описание ЛР № {lab_i}"
+            cb.message.chat.id, doc if doc else doc_id, caption=f"Описание ЛР № {lab_i}"
         )
     except:
         await cb.message.edit_text(
@@ -502,14 +498,14 @@ async def lab_description(cb: CallbackQuery):
         )
         await cb.answer()
         return
-    
+
     if not doc_id:
         cfg.set_link(lab_enum, msg.document.file_id)
-    
+
     s = await rq.get_student_by_tg(cb.from_user.id)
     if not await rq.get_lab_of(s, lab_i):
         await _give_lab(s, lab_i)
-    
+
     await cb.answer()
     await cb.message.delete()
 
@@ -524,9 +520,7 @@ async def send_lab(cb: CallbackQuery, state: FSMContext):
     lab_i = int(cb.data[-1])
     await state.set_state(SendLabReport.send_pdf)
     await state.update_data(student_tg=cb.from_user.id, lab_i=lab_i)
-    await cb.bot.send_message(
-        cb.message.chat.id, "Прикрепите PDF-файл >>>\n/cancel"
-    )
+    await cb.bot.send_message(cb.message.chat.id, "Прикрепите PDF-файл >>>\n/cancel")
     await cb.answer()
     await cb.message.delete()
 
@@ -544,15 +538,16 @@ async def send_lab_pdf(message: Message, state: FSMContext):
             "Требуется PDF-файл"
         )
         return
-    
+
     s = await rq.get_student_by_tg(message.from_user.id)
     lab_i = data["lab_i"]
     lab = await rq.get_lab_of(s, lab_i)
-    
+
     if not lab:
         await _give_lab(s, lab_i)
+        lab = await rq.get_lab_of(s, lab_i)
     if lab.done:
-        await message.answer(f"Вы уже сдали ЛР {lab_i} (оценка {lab.points})")
+        await message.answer(f"Вы уже сдали ЛР {lab_i} с оценкой {lab.points})")
         return
 
     await rq.send_lab(lab)
@@ -567,8 +562,7 @@ async def send_lab_pdf(message: Message, state: FSMContext):
 
     await message.answer("Работа отправлена на проверку преподавателю")
     await message.bot.send_message(
-        os.getenv('OWNER_ID'),
-        f"{s.get_name()} прислал(а) отчёт по ЛР № {lab_i}"
+        os.getenv("OWNER_ID"), f"{s.get_name()} прислал(а) отчёт по ЛР № {lab_i}"
     )
 
 
@@ -586,28 +580,25 @@ async def progress(message: Message):
     homeworks = [await rq.get_homework_of(student, sem) for sem in semesters]
     labs_n = (1, 2, 3), (4, 5, 6)
     labs = [
-        await rq.get_lab_of(student, n)
-        for sem in semesters for n in labs_n[sem - 1]
+        await rq.get_lab_of(student, n) for sem in semesters for n in labs_n[sem - 1]
     ]
 
     answer = "Успеваемость:\n\n"
     homeworks_text = ""
     for i, work in enumerate(homeworks, start=1):
         if not work or not work.done:
-            homeworks_text = homeworks_text + \
-                f"- ДЗ {i}-го семестра *не сдано*\n"
+            homeworks_text = homeworks_text + f"- ДЗ {i}-го семестра *не сдано*\n"
             continue
-        homeworks_text = homeworks_text + \
-            f"- ДЗ {i}-го семестра - {work.points} баллов\n"
-    
+        homeworks_text = (
+            homeworks_text + f"- ДЗ {i}-го семестра - {work.points} баллов\n"
+        )
+
     labs_text = ""
     for i, work in enumerate(labs, start=1):
         if not work or not work.done:
-            labs_text = labs_text + \
-                f"- ЛР № {i} *не выполнена*\n"
+            labs_text = labs_text + f"- ЛР № {i} *не выполнена*\n"
             continue
-        labs_text = labs_text + \
-            f"- ЛР № {i} - {work.points} баллов\n"
+        labs_text = labs_text + f"- ЛР № {i} - {work.points} баллов\n"
 
     await message.answer(answer + homeworks_text + labs_text)
 
@@ -622,12 +613,10 @@ async def keyboard(message: Message):
 async def about_bot(message: Message):
     await message.answer(
         "Вы как студент можете:\n"
-        "1. Получать задания ДЗ и лабораторных работ\n",
+        "1. Получать варианты ДЗ и описания лабораторных работ.\n"
         "2. ДЗ предполагает автоматическую проверку ответов ботом. "
         "После успешной проверки ботом появляется возможность "
-        "отправить отчёт на проверку преподавателем\n"
-        "3. Просматривать свою текущую успеваемость\n"
-        "4. Получать дополнительные материалы "
-        "(видео, шаблоны документов и др.)",
-        reply_markup=kb.student
+        "отправить отчёт на проверку преподавателем.\n"
+        "3. Просматривать свою текущую успеваемость.\n",
+        reply_markup=kb.student,
     )
