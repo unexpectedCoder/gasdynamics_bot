@@ -18,7 +18,6 @@ from app.keyboards.inline import (
     set_deadline,
     stats,
     students_actions,
-    update_groups,
 )
 from app.keyboards.keyboards import default_user, student, teacher
 
@@ -297,11 +296,6 @@ class TestStaticInlineKeyboards:
         assert "students:list" in cbs
         assert "students:add" in cbs
         assert "students:remove" in cbs
-
-    def test_update_groups_has_spring_and_autumn(self):
-        cbs = self._all_callbacks(update_groups)
-        assert "students:sem_1" in cbs
-        assert "students:sem_2" in cbs
 
     def test_stats_has_two_homework_options(self):
         cbs = self._all_callbacks(stats)

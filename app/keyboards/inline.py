@@ -161,22 +161,11 @@ students_actions = InlineKeyboardMarkup(
     inline_keyboard=[
         [IKB(text="Успеваемость", callback_data="students:progress")],
         [IKB(text="Список", callback_data="students:list")],
-        [IKB(text="Обновить номера групп", callback_data="students:update")],
         [IKB(text="Статус ДЗ", callback_data="students:homework_status")],
         [
             IKB(text="Добавить", callback_data="students:add"),
             IKB(text="Удалить", callback_data="students:remove"),
         ],
-    ]
-)
-
-
-update_groups = InlineKeyboardMarkup(
-    inline_keyboard=[
-        [
-            IKB(text="Весна", callback_data="students:sem_1"),
-            IKB(text="Осень", callback_data="students:sem_2"),
-        ]
     ]
 )
 

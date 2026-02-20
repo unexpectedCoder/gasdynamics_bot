@@ -910,37 +910,3 @@ class TestGetProgressOf:
 
         assert len(controls) == 4
         assert [c.control_number for c in controls] == [1, 2, 3, 4]
-
-
-# ---------------------------------------------------------------------------
-# update_groups
-# ---------------------------------------------------------------------------
-
-
-class TestUpdateGroups:
-    async def test_update_groups_changes_group_suffix(self, session_factory):
-        async with session_factory() as session:
-            # Group name ends with two characters; update_groups replaces [-2] with
-            # "4" (sem=1) or "5" (sem=2) and keeps the last char.
-            s = _make_student(group="КА-401")
-            session.add(s)
-            await session.commit()
-            s_id = s.id
-
-        await rq.update_groups(sem=1)
-
-        updated = await rq.get_student_by_id(s_id)
-        # last two chars: "01" → "4" + "1" = "41"
-        assert updated.group.endswith("41")
-
-    async def test_update_groups_sem2_uses_5(self, session_factory):
-        async with session_factory() as session:
-            s = _make_student(group="КА-401")
-            session.add(s)
-            await session.commit()
-            s_id = s.id
-
-        await rq.update_groups(sem=2)
-
-        updated = await rq.get_student_by_id(s_id)
-        assert updated.group.endswith("51")

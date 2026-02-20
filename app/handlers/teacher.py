@@ -729,19 +729,6 @@ async def students_stats(cb: CallbackQuery):
     await cb.answer()
 
 
-@router.callback_query(F.data == "students:update")
-async def update_students_groups(cb: CallbackQuery):
-    await cb.message.edit_text("Выберите семестр 👇", reply_markup=ikb.update_groups)
-    await cb.answer()
-
-
-@router.callback_query(F.data.startswith("students:sem_"))
-async def update_students_groups_sem(cb: CallbackQuery):
-    await rq.update_groups(int(cb.data[-1]))
-    await cb.message.edit_text("Обозначение учебных групп обновлено")
-    await cb.answer()
-
-
 @router.message(Command("kb"))
 async def keyboard(message: Message):
     await message.answer("Держите клаву!", reply_markup=kb.teacher)

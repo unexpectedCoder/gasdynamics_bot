@@ -537,11 +537,3 @@ async def get_progress_of(session: AsyncSession, s: Student):
 # ---------------------------------------------------------------------------
 # Публичный API — Misc
 # ---------------------------------------------------------------------------
-
-
-@connection
-async def update_groups(session: AsyncSession, sem: int):
-    students = await session.scalars(select(Student))
-    for s in students:
-        s.group = s.group[:-2] + ("4" if sem == 1 else "5") + s.group[-1]
-    await session.commit()
