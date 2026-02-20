@@ -39,16 +39,16 @@ def _make_student(**kwargs) -> Student:
 def _make_hw_nozzle(**kwargs) -> HomeworkNozzle:
     defaults = dict(
         variant=1,
-        p0="5000000.0",
-        T0="2500",
-        R="287.0",
-        k="1.4",
-        d_critic="0.15",
-        area_ratio="8.5",
-        d_chamber="1.2",
-        alpha="40",
-        beta="10",
-        rel_propel_mass="0.75",
+        p0=5000000.0,
+        T0=2500.0,
+        R=287.0,
+        k=1.4,
+        d_critic=0.15,
+        area_ratio=8.5,
+        d_chamber=1.2,
+        alpha=40.0,
+        beta=10.0,
+        rel_propel_mass=0.75,
     )
     defaults.update(kwargs)
     return HomeworkNozzle(**defaults)
@@ -57,10 +57,10 @@ def _make_hw_nozzle(**kwargs) -> HomeworkNozzle:
 def _make_hw_wedge(**kwargs) -> HomeworkShockWedge:
     defaults = dict(
         variant=1,
-        mach="2.5",
-        beta1="10.0",
-        beta2="20.0",
-        beta3="30.0",
+        mach=2.5,
+        beta1=10.0,
+        beta2=20.0,
+        beta3=30.0,
     )
     defaults.update(kwargs)
     return HomeworkShockWedge(**defaults)

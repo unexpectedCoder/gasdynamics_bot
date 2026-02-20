@@ -3,7 +3,7 @@ from datetime import date
 from enum import Enum
 from typing import Literal
 
-from sqlalchemy import BigInteger, Date, ForeignKey, String, UniqueConstraint
+from sqlalchemy import BigInteger, Date, Float, ForeignKey, String, UniqueConstraint
 from sqlalchemy.ext.asyncio import AsyncAttrs, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import (
     DeclarativeBase,
@@ -132,16 +132,16 @@ class HomeworkNozzle(HomeworkMixin, Base):
     __tablename__ = "homes_nozzle"
 
     variant: Mapped[int] = mapped_column(unique=True)
-    p0: Mapped[str] = mapped_column(String(MAX_STR_LEN))
-    T0: Mapped[str] = mapped_column(String(MAX_STR_LEN))
-    R: Mapped[str] = mapped_column(String(MAX_STR_LEN))
-    k: Mapped[str] = mapped_column(String(MAX_STR_LEN))
-    d_critic: Mapped[str] = mapped_column(String(MAX_STR_LEN))
-    area_ratio: Mapped[str] = mapped_column(String(MAX_STR_LEN))
-    d_chamber: Mapped[str] = mapped_column(String(MAX_STR_LEN))
-    alpha: Mapped[str] = mapped_column(String(MAX_STR_LEN))
-    beta: Mapped[str] = mapped_column(String(MAX_STR_LEN))
-    rel_propel_mass: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+    p0: Mapped[float] = mapped_column()
+    T0: Mapped[float] = mapped_column()
+    R: Mapped[float] = mapped_column()
+    k: Mapped[float] = mapped_column()
+    d_critic: Mapped[float] = mapped_column()
+    area_ratio: Mapped[float] = mapped_column()
+    d_chamber: Mapped[float] = mapped_column()
+    alpha: Mapped[float] = mapped_column()
+    beta: Mapped[float] = mapped_column()
+    rel_propel_mass: Mapped[float] = mapped_column()
 
     student: Mapped["Student | None"] = relationship(
         back_populates="homework_nozzle", lazy="raise"
@@ -150,7 +150,7 @@ class HomeworkNozzle(HomeworkMixin, Base):
     def __str__(self):
         head = f"Вариант ДЗ - {self.variant}:\n"
 
-        p0 = f"  - давление в камере {round(float(self.p0) * 1e-6, 2)} МПа;\n"
+        p0 = f"  - давление в камере {round(self.p0 * 1e-6, 2)} МПа;\n"
         T0 = f"  - температура в камере {self.T0} К;\n"
         R = f"  - газовая постоянная {self.R} Дж/(кг К);\n"
         k = f"  - показатель адиабаты {self.k};\n"
@@ -180,10 +180,10 @@ class HomeworkShockWedge(HomeworkMixin, Base):
     __tablename__ = "homes_shock_wedge"
 
     variant: Mapped[int] = mapped_column(unique=True)
-    mach: Mapped[str] = mapped_column(String(MAX_STR_LEN))
-    beta1: Mapped[str] = mapped_column(String(MAX_STR_LEN))
-    beta2: Mapped[str] = mapped_column(String(MAX_STR_LEN))
-    beta3: Mapped[str] = mapped_column(String(MAX_STR_LEN))
+    mach: Mapped[float] = mapped_column()
+    beta1: Mapped[float] = mapped_column()
+    beta2: Mapped[float] = mapped_column()
+    beta3: Mapped[float] = mapped_column()
 
     student: Mapped["Student | None"] = relationship(
         back_populates="homework_shock_wedge", lazy="raise"

@@ -123,16 +123,16 @@ class TestHomeworkNozzleStr:
     def _make_hw(self, variant=3):
         return HomeworkNozzle(
             variant=variant,
-            p0="5000000.0",  # 5 МПа → round(5_000_000 * 1e-6, 2) = 5.0
-            T0="2500",
-            R="287.0",
-            k="1.4",
-            d_critic="0.15",
-            area_ratio="8.5",
-            d_chamber="1.2",
-            alpha="40",
-            beta="10",
-            rel_propel_mass="0.75",
+            p0=5000000.0,  # 5 МПа → round(5_000_000 * 1e-6, 2) = 5.0
+            T0=2500.0,
+            R=287.0,
+            k=1.4,
+            d_critic=0.15,
+            area_ratio=8.5,
+            d_chamber=1.2,
+            alpha=40.0,
+            beta=10.0,
+            rel_propel_mass=0.75,
         )
 
     def test_str_contains_variant(self):
@@ -203,10 +203,10 @@ class TestHomeworkShockWedgeStr:
     def _make_hw(self, variant=5):
         return HomeworkShockWedge(
             variant=variant,
-            mach="2.5",
-            beta1="10.0",
-            beta2="20.0",
-            beta3="30.0",
+            mach=2.5,
+            beta1=10.0,
+            beta2=20.0,
+            beta3=30.0,
         )
 
     def test_str_contains_variant(self):
