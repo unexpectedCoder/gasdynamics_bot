@@ -1,5 +1,4 @@
 import json
-import os
 import random as rand
 from datetime import date as ddate
 from functools import wraps
@@ -90,24 +89,22 @@ async def _init_homework_nozzle(session: AsyncSession):
     path = cfg.get_file("home_nozzle")
     with open(path, "r") as f:
         variants = _shuffle_variants(json.load(f))
-    students = await session.scalars(select(Student))
-    for v, s in zip(variants, students):
-        session.add(HomeworkNozzle(student_id=s.id, variant=v, **variants[v]))
+    for v in variants:
+        session.add(HomeworkNozzle(variant=v, **variants[v]))
 
 
 async def _init_homework_shock_wedge(session: AsyncSession):
     path = cfg.get_file("home_shock_wedge")
     with open(path, "r") as f:
         variants = _shuffle_variants(json.load(f))
-    students = await session.scalars(select(Student))
-    for v, s in zip(variants, students):
-        session.add(HomeworkShockWedge(student_id=s.id, variant=v, **variants[v]))
+    for v in variants:
+        session.add(HomeworkShockWedge(variant=v, **variants[v]))
 
 
 async def _init_labs(session: AsyncSession):
     students = await session.scalars(select(Student))
     for s in students:
-        for n in range(1, 7):
+        for n in range(1, 13):
             session.add(Lab(student_id=s.id, lab_number=n))
 
 

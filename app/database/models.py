@@ -238,23 +238,3 @@ class ControlNumber(Enum):
 
 
 AnyHomework = HomeworkNozzle | HomeworkShockWedge
-
-
-async def async_main():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    await _ensure_homework_settings()
-
-
-async def _ensure_homework_settings():
-    """Create HomeworkSettings rows for each hw type if they don't exist yet."""
-    from sqlalchemy import select
-
-    async with async_session() as session:
-        for hw_type in HW_TYPES:
-            exists = await session.scalar(
-                select(HomeworkSettings).where(HomeworkSettings.hw_type == hw_type)
-            )
-            if not exists:
-                session.add(HomeworkSettings(hw_type=hw_type, available=False))
-        await session.commit()

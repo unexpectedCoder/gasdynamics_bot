@@ -597,7 +597,7 @@ async def students_list(cb: CallbackQuery):
         for g in groups
     }
 
-    answer = "Список студентов:\n\n"
+    answer = "*Список студентов*\n"
     for group in students:
         answer = answer + f"\n{group}:\n"
 
@@ -611,9 +611,9 @@ async def students_list(cb: CallbackQuery):
             hw_w = await rq.get_homework_of_type(s, "shock_wedge")
             variants = []
             if hw_n and hw_n.student_id:
-                variants.append(f"сопло вар. № {hw_n.variant}")
+                variants.append(f"ДЗ №1 вар. {hw_n.variant}")
             if hw_w and hw_w.student_id:
-                variants.append(f"клин вар. № {hw_w.variant}")
+                variants.append(f"ДЗ №2 вар. {hw_w.variant}")
             variant = f" ({', '.join(variants)})" if variants else ""
             answer = answer + text + variant + "\n"
 

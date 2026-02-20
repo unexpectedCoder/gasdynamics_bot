@@ -11,7 +11,7 @@ from aiogram.enums import ParseMode
 
 import app.database.requests as rq
 import config
-from app.database.models import async_main
+from app.database import async_main
 from app.handlers.base import router as base_router
 from app.handlers.student import router as student_router
 from app.handlers.teacher import router as teacher_router
