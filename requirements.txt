@@ -10,3 +10,5 @@ openpyxl
 python-dotenv
 pydantic-settings
 odfpy
+pytest
+pytest-asyncio
