@@ -346,9 +346,9 @@ async def check_labs(cb: CallbackQuery, state: FSMContext):
     await cb.answer()
 
 
-@router.callback_query(F.data.regexp(r"^labs:check_\d$"), default_state)
+@router.callback_query(F.data.regexp(r"^labs:check_\d{1,2}$"), default_state)
 async def check_lab(cb: CallbackQuery, state: FSMContext):
-    lab_n = int(cb.data[-1])
+    lab_n = int(cb.data.rsplit("_", 1)[-1])
     dirname = os.path.join(cfg.get_dir(f"labs_to_check"), str(lab_n))
 
     if not os.path.exists(dirname) or not os.listdir(dirname):
@@ -474,15 +474,38 @@ async def assess_lab_cancel(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "labs:add")
 async def add_lab(cb: CallbackQuery):
+    labs_dir = cfg.get_dir("labs")
+    try:
+        entries = os.listdir(labs_dir)
+    except OSError:
+        entries = []
+
+    existing_numbers = sorted(
+        {
+            int(f[4:-4])
+            for f in entries
+            if f.startswith("lab_") and f.endswith(".pdf") and f[4:-4].isdigit()
+        }
+    )
+    existing_numbers = [n for n in existing_numbers if 1 <= n <= 12]
+
+    if existing_numbers:
+        next_number = max(existing_numbers) + 1
+        lab_numbers = (
+            existing_numbers + [next_number] if next_number <= 12 else existing_numbers
+        )
+    else:
+        lab_numbers = [1]
+
     await cb.message.edit_text(
-        "Материал для какой ЛР добавить? 👇", reply_markup=ikb.add_lab
+        "Материал для какой ЛР добавить? 👇", reply_markup=ikb.add_lab(lab_numbers)
     )
     await cb.answer()
 
 
-@router.callback_query(F.data.regexp(r"^labs:add_\d$"), default_state)
+@router.callback_query(F.data.regexp(r"^labs:add_\d{1,2}$"), default_state)
 async def add_lab_n(cb: CallbackQuery, state: FSMContext):
-    lab_n = int(cb.data[-1])
+    lab_n = int(cb.data.rsplit("_", 1)[-1])
     lab_file = f"lab_{lab_n}.pdf"
     labs_dir = cfg.get_dir("labs")
 

@@ -400,18 +400,18 @@ async def labs(message: Message):
     await message.answer("Выберите ЛР 👇", reply_markup=ikb.labwork(lab_numbers))
 
 
-@router.callback_query(F.data.regexp(r"^lab:\d$"))
+@router.callback_query(F.data.regexp(r"^lab:\d{1,2}$"))
 async def labs_actions(cb: CallbackQuery):
-    lab_i = int(cb.data[-1])
+    lab_i = int(cb.data.rsplit(":", 1)[-1])
     await cb.message.edit_text(
         f"Выберите действие с ЛР № {lab_i} 👇", reply_markup=ikb.labs_action(lab_i)
     )
     await cb.answer()
 
 
-@router.callback_query(F.data.regexp(r"^lab:description_\d$"))
+@router.callback_query(F.data.regexp(r"^lab:description_\d{1,2}$"))
 async def lab_description(cb: CallbackQuery):
-    lab_i = int(cb.data[-1])
+    lab_i = int(cb.data.rsplit("_", 1)[-1])
     path = os.path.join(cfg.get_dir("labs"), f"lab_{lab_i}.pdf")
 
     doc_id = cfg.get_link(f"lab_{lab_i}")
@@ -445,9 +445,9 @@ async def _give_lab(student: rq.Student, lab_i: int):
     await rq.set_lab(student, lab)
 
 
-@router.callback_query(F.data.regexp(r"^lab:send_\d$"), default_state)
+@router.callback_query(F.data.regexp(r"^lab:send_\d{1,2}$"), default_state)
 async def send_lab(cb: CallbackQuery, state: FSMContext):
-    lab_i = int(cb.data[-1])
+    lab_i = int(cb.data.rsplit("_", 1)[-1])
     await state.set_state(SendLabReport.send_pdf)
     await state.update_data(student_tg=cb.from_user.id, lab_i=lab_i)
     await cb.bot.send_message(cb.message.chat.id, cancel_or("Прикрепите PDF-файл >>>"))

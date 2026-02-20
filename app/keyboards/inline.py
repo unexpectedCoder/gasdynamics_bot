@@ -131,20 +131,11 @@ labs_approve_or_remark = InlineKeyboardMarkup(
 )
 
 
-add_lab = InlineKeyboardMarkup(
-    inline_keyboard=[
-        [
-            IKB(text="№ 1", callback_data="labs:add_1"),
-            IKB(text="№ 2", callback_data="labs:add_2"),
-            IKB(text="№ 3", callback_data="labs:add_3"),
-        ],
-        [
-            IKB(text="№ 4", callback_data="labs:add_4"),
-            IKB(text="№ 5", callback_data="labs:add_5"),
-            IKB(text="№ 6", callback_data="labs:add_6"),
-        ],
-    ]
-)
+def add_lab(lab_numbers: list[int]):
+    builder = InlineKeyboardBuilder()
+    for i in lab_numbers:
+        builder.add(IKB(text=f"№ {i}", callback_data=f"labs:add_{i}"))
+    return builder.adjust(3).as_markup()
 
 
 replace_lab = InlineKeyboardMarkup(

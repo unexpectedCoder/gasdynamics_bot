@@ -280,9 +280,10 @@ class TestStaticInlineKeyboards:
         assert "labs:approve" in cbs
         assert "labs:remark" in cbs
 
-    def test_add_lab_has_six_labs(self):
-        cbs = self._all_callbacks(add_lab)
-        for i in range(1, 7):
+    def test_add_lab_has_expected_labs(self):
+        kb = add_lab([1, 2, 6])
+        cbs = self._all_callbacks(kb)
+        for i in (1, 2, 6):
             assert f"labs:add_{i}" in cbs
 
     def test_replace_lab_has_yes_and_no(self):
