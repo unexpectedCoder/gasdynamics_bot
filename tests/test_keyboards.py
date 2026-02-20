@@ -305,8 +305,8 @@ class TestStaticInlineKeyboards:
 
     def test_stats_has_two_homework_options(self):
         cbs = self._all_callbacks(stats)
-        assert "stats_hw_1" in cbs
-        assert "stats_hw_2" in cbs
+        assert "stats_hw_nozzle" in cbs
+        assert "stats_hw_shock_wedge" in cbs
 
     def test_hw_results_code_has_template_file_code(self):
         cbs = self._all_callbacks(hw_results_code)

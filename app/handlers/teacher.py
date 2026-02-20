@@ -27,7 +27,6 @@ from app.states import (
     RemoveStudent,
 )
 from app.utils.cancel_or import cancel_or
-from app.utils.seasons import get_current_semester
 
 router = Router()
 router.message.filter(IsTeacher())
@@ -44,7 +43,41 @@ async def exams(message: Message):
 
 @router.callback_query(F.data == "exam:homework")
 async def homework(cb: CallbackQuery):
-    await cb.message.edit_text("Выберите действие с ДЗ 👇", reply_markup=ikb.homework_t)
+    settings = await rq.get_active_hw_settings()
+    if settings is None:
+        status = "ДЗ закрыто"
+    else:
+        label = "сопло" if settings.hw_type == "nozzle" else "клин"
+        status = f"Открыто ДЗ ({label})"
+    await cb.message.edit_text(
+        f"Выберите действие с ДЗ 👇\n_Статус: {status}_",
+        reply_markup=ikb.homework_t,
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("homework:open_"), default_state)
+async def open_homework(cb: CallbackQuery):
+    hw_type = cb.data.removeprefix("homework:open_")
+    await rq.set_hw_available(hw_type, True)
+    label = "сопло (ДЗ №1)" if hw_type == "nozzle" else "клин (ДЗ №2)"
+    await cb.message.edit_text(
+        f"ДЗ ({label}) открыто для студентов ✅", reply_markup=ikb.homework_t
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data == "homework:close", default_state)
+async def close_homework(cb: CallbackQuery):
+    settings = await rq.get_active_hw_settings()
+    if settings is None:
+        await cb.message.edit_text("ДЗ и так закрыто", reply_markup=ikb.homework_t)
+        await cb.answer()
+        return
+    await rq.set_hw_available(settings.hw_type, False)
+    await cb.message.edit_text(
+        "ДЗ закрыто для студентов 🔒", reply_markup=ikb.homework_t
+    )
     await cb.answer()
 
 
@@ -164,7 +197,7 @@ async def assess_homework(message: Message, state: FSMContext):
     data = await state.get_data()
 
     data["date"] = date.today()
-    sem = get_current_semester()
+    sem = data["sem"]
     await rq.assess_homework(data, sem)
 
     dst = os.path.join(
@@ -216,7 +249,7 @@ async def enter_homework_deadline(message: Message, state: FSMContext):
         await message.answer("Некорректный формат даты. Требуется `дд.мм.гггг`")
         return
 
-    await rq.set_homework_deadline(get_current_semester(), deadline)
+    await rq.set_homework_deadline(deadline)
     await message.answer(f"Установлен срок сдачи ДЗ - {deadline}")
 
 
@@ -228,18 +261,22 @@ async def set_homework_deadline_cancel(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "exam:rk", default_state)
 async def exam_controlling(cb: CallbackQuery, state: FSMContext):
-    sem = get_current_semester()
     students = list(await rq.get_students())
-    controls = [await rq.get_controls_of(s, sem) for s in students]
+    controls = [await rq.get_all_controls_of(s) for s in students]
     groups = [s.group for s in students]
+
+    def _pts(c_list, idx):
+        return c_list[idx].points if c_list and len(c_list) > idx else 0
 
     progress = pd.DataFrame(
         {
             "id": [s.id for s in students],
             "ФИО": [s.get_name() for s in students],
             "Группа": groups,
-            "РК 1": list(map(lambda c: c[0].points if c else 0, controls)),
-            "РК 2": list(map(lambda c: c[1].points if c else 0, controls)),
+            "РК 1": [_pts(c, 0) for c in controls],
+            "РК 2": [_pts(c, 1) for c in controls],
+            "РК 3": [_pts(c, 2) for c in controls],
+            "РК 4": [_pts(c, 3) for c in controls],
         }
     ).sort_values(by=["Группа", "ФИО"])
 
@@ -279,13 +316,13 @@ async def send_controls_excel(message: Message, state: FSMContext):
     dst = os.path.join(cfg.get_dir("controls"), f"controls_{timestamp}.{doc_format}")
     await message.bot.download(doc, dst)
     excel = pd.read_excel(dst)
-    sem = get_current_semester()
     for _, row in excel.iterrows():
         student = await rq.get_student_by_id(row["id"])
-        controls = await rq.get_controls_of(student, sem)
-        controls[0].points = row["РК 1"]
-        controls[1].points = row["РК 2"]
-        await rq.set_control_points_of(student, controls)
+        controls = await rq.get_all_controls_of(student)
+        for i, col in enumerate(["РК 1", "РК 2", "РК 3", "РК 4"]):
+            if col in row and len(controls) > i:
+                controls[i].points = row[col]
+        await rq.set_control_points_of(controls)
 
     os.remove(dst)
     await message.answer("Успеваемость студентов обновлена")
@@ -516,23 +553,27 @@ async def students(message: Message):
 @router.callback_query(F.data == "students:progress")
 async def students_progress(cb: CallbackQuery):
     students = list(await rq.get_students())
-    sem = get_current_semester()
-    progresses = [await rq.get_progress_of(s, sem) for s in students]
-    homeworks = list(map(lambda p: p[0], progresses))
-    labs = [list(map(lambda p: p[1][i], progresses)) for i in range(3)]
-    controls = list(map(lambda p: p[2], progresses))
+    progresses = [await rq.get_progress_of(s) for s in students]
+    hw_nozzle = [p[0] for p in progresses]
+    hw_wedge = [p[1] for p in progresses]
+    lab_points = [[p[2][i] for p in progresses] for i in range(6)]
+    controls = [p[3] for p in progresses]
     groups = [s.group for s in students]
+
+    def _rk(c_list, idx):
+        return 0 if not c_list or len(c_list) <= idx else (c_list[idx].points or 0)
 
     progress = pd.DataFrame(
         {
             "ФИО": [s.get_name() for s in students],
             "Группа": groups,
-            "РК 1": list(map(lambda c: 0 if not c else c[0].points, controls)),
-            "РК 2": list(map(lambda c: 0 if not c else c[1].points, controls)),
-            "ДЗ": homeworks,
-            "ЛР № 1": labs[0],
-            "ЛР № 2": labs[1],
-            "ЛР № 3": labs[2],
+            "РК 1": [_rk(c, 0) for c in controls],
+            "РК 2": [_rk(c, 1) for c in controls],
+            "РК 3": [_rk(c, 2) for c in controls],
+            "РК 4": [_rk(c, 3) for c in controls],
+            "ДЗ сопло": hw_nozzle,
+            "ДЗ клин": hw_wedge,
+            **{f"ЛР № {i + 1}": lab_points[i] for i in range(6)},
         }
     ).sort_values(by=["Группа", "ФИО"])
 
@@ -555,7 +596,6 @@ async def students_list(cb: CallbackQuery):
         g: sorted([s for s in students if s.group == g], key=lambda x: x.get_name())
         for g in groups
     }
-    sem = get_current_semester()
 
     answer = "Список студентов:\n\n"
     for group in students:
@@ -567,8 +607,14 @@ async def students_list(cb: CallbackQuery):
             else:
                 text = f"  {i}. [{s.lastname} {s.firstname}](tg://user?id={s.tg_id})"
 
-            work = await rq.get_homework_of(s, sem)
-            variant = f" (вар. № {work.variant})" if work else ""
+            hw_n = await rq.get_homework_of_type(s, "nozzle")
+            hw_w = await rq.get_homework_of_type(s, "shock_wedge")
+            variants = []
+            if hw_n and hw_n.student_id:
+                variants.append(f"сопло вар. № {hw_n.variant}")
+            if hw_w and hw_w.student_id:
+                variants.append(f"клин вар. № {hw_w.variant}")
+            variant = f" ({', '.join(variants)})" if variants else ""
             answer = answer + text + variant + "\n"
 
     await cb.message.edit_text(answer)
@@ -658,22 +704,25 @@ async def students_stats(cb: CallbackQuery):
     students = list(await rq.get_students())
     answer = "Статистика:\n\n"
 
+    def _hw_status(work, label: str) -> str:
+        if not work or work.student_id is None:
+            return f"    {label}: *не выдано*"
+        if work.done:
+            return f"    {label}: *сдано* на *{work.points} баллов*"
+        if work.approved:
+            return f"    {label}: *проверено ботом*, но *не сдано*"
+        return f"    {label}: *не проверено ботом* и *не сдано*"
+
+    text = ""
     for i, s in enumerate(students, start=1):
         answer = answer + f"{i}. {s}\n"
-        work = await rq.get_homework_of(s, get_current_semester())
-        if not work:
-            text = f"    ДЗ *не выдано*"
-        elif work.done:
-            text = f"    ДЗ *сдано* на *{work.points} баллов*"
-        elif work.approved:
-            text = f"    ДЗ *проверено ботом*, но *не сдано*"
-        else:
-            text = f"    ДЗ *не проверено ботом* и *не сдано*"
+        hw_n = await rq.get_homework_of_type(s, "nozzle")
+        hw_w = await rq.get_homework_of_type(s, "shock_wedge")
+        text = _hw_status(hw_n, "ДЗ (сопло)") + "\n" + _hw_status(hw_w, "ДЗ (клин)")
         answer = answer + text + "\n"
         if i % 10 == 0:
             await cb.bot.send_message(cb.message.chat.id, answer)
             answer = ""
-    answer = answer + text
 
     if i % 10 != 0:
         await cb.bot.send_message(cb.message.chat.id, answer)

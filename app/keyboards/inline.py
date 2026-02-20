@@ -55,6 +55,14 @@ homework_t = InlineKeyboardMarkup(
     inline_keyboard=[
         [IKB(text="Проверить", callback_data="homework:check")],
         [IKB(text="Установить дедлайн", callback_data="homework:set_deadline")],
+        [
+            IKB(text="Активировать ДЗ №1", callback_data="homework:open_nozzle"),
+            IKB(
+                text="Активировать ДЗ №2",
+                callback_data="homework:open_shock_wedge",
+            ),
+        ],
+        [IKB(text="Закрыть ДЗ", callback_data="homework:close")],
     ]
 )
 
@@ -176,8 +184,8 @@ update_groups = InlineKeyboardMarkup(
 stats = InlineKeyboardMarkup(
     inline_keyboard=[
         [
-            IKB(text="ДЗ № 1", callback_data="stats_hw_1"),
-            IKB(text="ДЗ № 2", callback_data="stats_hw_2"),
+            IKB(text="ДЗ №1", callback_data="stats_hw_nozzle"),
+            IKB(text="ДЗ №2", callback_data="stats_hw_shock_wedge"),
         ]
     ]
 )

@@ -9,6 +9,7 @@ from app.database.models import (
     Base,
     ControlWork,
     HomeworkNozzle,
+    HomeworkSettings,
     HomeworkShockWedge,
     Lab,
     Student,
@@ -441,24 +442,27 @@ class TestSetHomework:
 
 
 class TestSetHomeworkDeadline:
-    async def test_deadline_is_set_for_all_records(self, session_factory):
+    async def test_deadline_is_set_on_active_settings(self, session_factory):
         async with session_factory() as session:
-            session.add(_make_hw_nozzle(student_id=None, variant=10))
-            session.add(_make_hw_nozzle(student_id=None, variant=11))
+            session.add(HomeworkSettings(hw_type="nozzle", available=True))
             await session.commit()
 
         target_date = date(2025, 6, 1)
-        await rq.set_homework_deadline(sem=1, date=target_date)
+        await rq.set_homework_deadline(target_date)
 
-        result = await rq.get_homework_deadline(sem=1)
+        result = await rq.get_homework_deadline()
         assert result == target_date
 
     async def test_get_deadline_returns_none_when_not_set(self, session_factory):
         async with session_factory() as session:
-            session.add(_make_hw_nozzle(student_id=None, variant=20))
+            session.add(HomeworkSettings(hw_type="nozzle", available=True))
             await session.commit()
 
-        result = await rq.get_homework_deadline(sem=1)
+        result = await rq.get_homework_deadline()
+        assert result is None
+
+    async def test_get_deadline_returns_none_when_no_active_settings(self):
+        result = await rq.get_homework_deadline()
         assert result is None
 
 
@@ -710,13 +714,6 @@ class TestDeleteStudent:
         result = await rq.get_student_by_id(s_id)
         assert result is None
 
-    @pytest.mark.xfail(
-        reason=(
-            "Bug in requests.py: delete_student uses 'approved_date' but the "
-            "column is named 'approve_date' in HomeworkMixin — causes SQLAlchemy error."
-        ),
-        strict=True,
-    )
     async def test_homework_is_freed_on_delete(self, session_factory):
         async with session_factory() as session:
             s = _make_student(mark_book="DEL002")
@@ -839,12 +836,13 @@ class TestGetProgressOf:
             s_id = s.id
 
         student = await rq.get_student_by_id(s_id)
-        hw_points, labs, controls = await rq.get_progress_of(student, sem=1)
+        hw_nozzle, hw_wedge, labs, controls = await rq.get_progress_of(student)
 
-        assert hw_points is None
+        assert hw_nozzle is None
+        assert hw_wedge is None
         assert all(p is None for p in labs)
 
-    async def test_returns_correct_hw_points(self, session_factory):
+    async def test_returns_correct_nozzle_hw_points(self, session_factory):
         async with session_factory() as session:
             s = _make_student()
             session.add(s)
@@ -855,31 +853,63 @@ class TestGetProgressOf:
             session.add(hw)
             await session.commit()
 
-            for n in (1, 2):
+            for n in (1, 2, 3, 4):
                 session.add(ControlWork(student_id=s.id, control_number=n))
             await session.commit()
             s_id = s.id
 
         student = await rq.get_student_by_id(s_id)
-        hw_points, labs, controls = await rq.get_progress_of(student, sem=1)
+        hw_nozzle, hw_wedge, labs, controls = await rq.get_progress_of(student)
 
-        assert hw_points == 85
+        assert hw_nozzle == 85
+        assert hw_wedge is None
 
-    async def test_returns_three_lab_slots_per_semester(self, session_factory):
+    async def test_returns_correct_wedge_hw_points(self, session_factory):
         async with session_factory() as session:
             s = _make_student()
             session.add(s)
             await session.commit()
 
-            for n in (1, 2):
+            hw = _make_hw_wedge(student_id=s.id)
+            hw.points = 72
+            session.add(hw)
+            await session.commit()
+            s_id = s.id
+
+        student = await rq.get_student_by_id(s_id)
+        hw_nozzle, hw_wedge, labs, controls = await rq.get_progress_of(student)
+
+        assert hw_nozzle is None
+        assert hw_wedge == 72
+
+    async def test_returns_six_lab_slots(self, session_factory):
+        async with session_factory() as session:
+            s = _make_student()
+            session.add(s)
+            await session.commit()
+            s_id = s.id
+
+        student = await rq.get_student_by_id(s_id)
+        _, _, labs, _ = await rq.get_progress_of(student)
+
+        assert len(labs) == 6
+
+    async def test_returns_all_four_controls(self, session_factory):
+        async with session_factory() as session:
+            s = _make_student()
+            session.add(s)
+            await session.commit()
+
+            for n in (1, 2, 3, 4):
                 session.add(ControlWork(student_id=s.id, control_number=n))
             await session.commit()
             s_id = s.id
 
         student = await rq.get_student_by_id(s_id)
-        _, labs, _ = await rq.get_progress_of(student, sem=1)
+        _, _, _, controls = await rq.get_progress_of(student)
 
-        assert len(labs) == 3
+        assert len(controls) == 4
+        assert [c.control_number for c in controls] == [1, 2, 3, 4]
 
 
 # ---------------------------------------------------------------------------

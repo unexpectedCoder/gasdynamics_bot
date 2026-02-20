@@ -9,9 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import config as cfg
 from app.database.models import (
+    HW_TYPE_NOZZLE,
+    HW_TYPE_SHOCK_WEDGE,
     AnyHomework,
     ControlWork,
     HomeworkNozzle,
+    HomeworkSettings,
     HomeworkShockWedge,
     Lab,
     Student,
@@ -106,10 +109,24 @@ def _shuffle_variants(variants: dict):
     return dict(items)
 
 
+def _get_hw_class(hw_type: str):
+    """Return the ORM class for the given homework type string."""
+    if hw_type == HW_TYPE_NOZZLE:
+        return HomeworkNozzle
+    if hw_type == HW_TYPE_SHOCK_WEDGE:
+        return HomeworkShockWedge
+    raise RuntimeError(f"unknown homework type: {hw_type!r}")
+
+
 def _get_semester_hw(sem: int):
+    """Legacy helper: map semester number to ORM class (used by teacher flows)."""
     if sem < 1 or sem > 2:
         raise RuntimeError(f"нет задания для {sem} семестра")
     return HomeworkNozzle if sem == 1 else HomeworkShockWedge
+
+
+def _sem_to_hw_type(sem: int) -> str:
+    return HW_TYPE_NOZZLE if sem == 1 else HW_TYPE_SHOCK_WEDGE
 
 
 # ---------------------------------------------------------------------------
@@ -126,16 +143,29 @@ async def _get_homework_of(session: AsyncSession, s: Student, sem: int):
     return await session.scalar(select(HW).where(HW.student_id == s.id))
 
 
+async def _get_homework_of_type(session: AsyncSession, s: Student, hw_type: str):
+    HW = _get_hw_class(hw_type)
+    return await session.scalar(select(HW).where(HW.student_id == s.id))
+
+
 async def _get_lab_of(session: AsyncSession, s: Student, lab_n: int):
     return await session.scalar(
         select(Lab).where(Lab.student_id == s.id, Lab.lab_number == lab_n)
     )
 
 
+async def _get_all_controls_of(session: AsyncSession, s: Student):
+    """Return all four control works for the student, sorted by control_number."""
+    result = await session.scalars(
+        select(ControlWork)
+        .where(ControlWork.student_id == s.id)
+        .order_by(ControlWork.control_number)
+    )
+    return list(result.all())
+
+
 async def _get_controls_of(session: AsyncSession, s: Student, sem: int):
-    """Возвращает список из двух контрольных работ для указанного семестра,
-    отсортированных по control_number (т.е. [РК1, РК2]).
-    """
+    """Return two control works for the given semester, sorted by control_number."""
     numbers = (1, 2) if sem == 1 else (3, 4)
     result = await session.scalars(
         select(ControlWork)
@@ -145,8 +175,86 @@ async def _get_controls_of(session: AsyncSession, s: Student, sem: int):
     return list(result.all())
 
 
+async def _get_active_hw_settings(session: AsyncSession) -> HomeworkSettings | None:
+    return await session.scalar(
+        select(HomeworkSettings).where(HomeworkSettings.available.is_(True))
+    )
+
+
+async def _get_hw_settings(
+    session: AsyncSession, hw_type: str
+) -> HomeworkSettings | None:
+    return await session.scalar(
+        select(HomeworkSettings).where(HomeworkSettings.hw_type == hw_type)
+    )
+
+
 # ---------------------------------------------------------------------------
-# Публичный API
+# Публичный API — HomeworkSettings
+# ---------------------------------------------------------------------------
+
+
+@connection
+async def get_active_hw_settings(session: AsyncSession) -> HomeworkSettings | None:
+    """Return the HomeworkSettings row that is currently marked available, or None."""
+    return await _get_active_hw_settings(session)
+
+
+@connection
+async def get_hw_settings(
+    session: AsyncSession, hw_type: str
+) -> HomeworkSettings | None:
+    """Return HomeworkSettings for a specific hw_type."""
+    return await _get_hw_settings(session, hw_type)
+
+
+@connection
+async def set_hw_available(session: AsyncSession, hw_type: str, available: bool):
+    """Enable or disable student access to a homework type.
+
+    When enabling a type, all other types are automatically disabled so that
+    only one homework is active at a time.
+    """
+    if available:
+        # Close all others first
+        await session.execute(
+            update(HomeworkSettings)
+            .where(HomeworkSettings.hw_type != hw_type)
+            .values(available=False)
+        )
+    await session.execute(
+        update(HomeworkSettings)
+        .where(HomeworkSettings.hw_type == hw_type)
+        .values(available=available)
+    )
+    await session.commit()
+
+
+@connection
+async def set_homework_deadline(session: AsyncSession, deadline: ddate | None):
+    """Set deadline on the currently active HomeworkSettings row."""
+    settings = await _get_active_hw_settings(session)
+    if settings is None:
+        return
+    await session.execute(
+        update(HomeworkSettings)
+        .where(HomeworkSettings.hw_type == settings.hw_type)
+        .values(deadline=deadline)
+    )
+    await session.commit()
+
+
+@connection
+async def get_homework_deadline(session: AsyncSession) -> ddate | None:
+    """Return the deadline from the currently active HomeworkSettings, or None."""
+    settings = await _get_active_hw_settings(session)
+    if settings is None:
+        return None
+    return settings.deadline
+
+
+# ---------------------------------------------------------------------------
+# Публичный API — Students / Teachers
 # ---------------------------------------------------------------------------
 
 
@@ -156,121 +264,6 @@ async def reg_student(session: AsyncSession, student: Student):
         update(Student).where(Student.id == student.id).values(tg_id=student.tg_id)
     )
     await session.commit()
-
-
-@connection
-async def get_free_homework(session: AsyncSession, sem: int):
-    HW = _get_semester_hw(sem)
-    return await session.scalar(select(HW).where(HW.student_id.is_(None)))
-
-
-@connection
-async def get_free_lab(session: AsyncSession, lab_n: int):
-    return await session.scalar(
-        select(Lab).where(Lab.lab_number == lab_n, Lab.student_id.is_(None))
-    )
-
-
-@connection
-async def get_homework_of(session: AsyncSession, s: Student, sem: int):
-    return await _get_homework_of(session, s, sem)
-
-
-@connection
-async def get_lab_of(session: AsyncSession, s: Student, lab_n: int):
-    return await _get_lab_of(session, s, lab_n)
-
-
-@connection
-async def set_homework(session: AsyncSession, s: Student, hw: AnyHomework):
-    HW = type(hw)
-    await session.execute(update(HW).where(HW.id == hw.id).values(student_id=s.id))
-    await session.commit()
-
-
-@connection
-async def set_lab(session: AsyncSession, s: Student, lab: Lab):
-    await session.execute(update(Lab).where(Lab.id == lab.id).values(student_id=s.id))
-    await session.commit()
-
-
-@connection
-async def set_homework_deadline(session: AsyncSession, sem: int, date: ddate):
-    HW = _get_semester_hw(sem)
-    await session.execute(update(HW).values(deadline=date))
-    await session.commit()
-
-
-@connection
-async def approve_homework(
-    session: AsyncSession, student: Student, date: ddate, sem: int
-):
-    HW = _get_semester_hw(sem)
-    await session.execute(
-        update(HW)
-        .where(HW.student_id == student.id)
-        .values(approve_date=date, approved=True)
-    )
-    await session.commit()
-
-
-@connection
-async def get_students_homeworks(session: AsyncSession, sem: int):
-    HW = _get_semester_hw(sem)
-    return await session.scalars(select(HW).where(HW.student_id.isnot(None)))
-
-
-@connection
-async def send_homework(session: AsyncSession, hw: AnyHomework):
-    HW = type(hw)
-    await session.execute(update(HW).where(HW.id == hw.id).values(send=True))
-    await session.commit()
-
-
-@connection
-async def send_lab(session: AsyncSession, lab: Lab):
-    await session.execute(update(Lab).where(Lab.id == lab.id).values(send=True))
-    await session.commit()
-
-
-@connection
-async def assess_homework(session: AsyncSession, data: dict, sem: int):
-    HW = _get_semester_hw(sem)
-    student = data["student"]
-    points = data["points"]
-    date = data["date"]
-
-    await session.execute(
-        update(HW)
-        .where(HW.student_id == student.id)
-        .values(done=True, done_date=date, points=points)
-    )
-    await session.commit()
-
-
-@connection
-async def assess_lab(session: AsyncSession, data: dict, lab: Lab):
-    points = data["points"]
-    date = data["date"]
-
-    await session.execute(
-        update(Lab)
-        .where(Lab.id == lab.id)
-        .values(done=True, done_date=date, points=points)
-    )
-    await session.commit()
-
-
-@connection
-async def get_homework_deadline(session: AsyncSession, sem: int):
-    HW = _get_semester_hw(sem)
-    work = await session.scalar(select(HW))
-    return work.deadline
-
-
-@connection
-async def get_teacher_by_tg(session: AsyncSession, tg_id: int):
-    return await session.scalar(select(Teacher).where(Teacher.tg_id == tg_id))
 
 
 @connection
@@ -306,8 +299,8 @@ async def add_student(session: AsyncSession, data: dict):
 
 @connection
 async def delete_student(session: AsyncSession, s: Student):
-    for sem in (1, 2):
-        hw = await _get_homework_of(session, s, sem)
+    for hw_type in (HW_TYPE_NOZZLE, HW_TYPE_SHOCK_WEDGE):
+        hw = await _get_homework_of_type(session, s, hw_type)
         if hw:
             table = type(hw)
             await session.execute(
@@ -318,7 +311,7 @@ async def delete_student(session: AsyncSession, s: Student):
                     done=False,
                     done_date=None,
                     approved=False,
-                    approved_date=None,
+                    approve_date=None,
                     send=False,
                     points=None,
                 )
@@ -341,33 +334,204 @@ async def delete_student(session: AsyncSession, s: Student):
 
 
 @connection
-async def get_progress_of(session: AsyncSession, s: Student, sem: int):
-    hw = await _get_homework_of(session, s, sem)
-    hw = hw.points if hw else None
+async def get_teacher_by_tg(session: AsyncSession, tg_id: int):
+    return await session.scalar(select(Teacher).where(Teacher.tg_id == tg_id))
 
-    labs_n = (1, 2, 3) if sem == 1 else (4, 5, 6)
-    labs = [await _get_lab_of(session, s, n) for n in labs_n]
-    for i, lab in enumerate(labs):
-        labs[i] = lab.points if lab else None
 
-    controls = await _get_controls_of(session, s, sem)
+# ---------------------------------------------------------------------------
+# Публичный API — Homework (student-facing, uses active settings)
+# ---------------------------------------------------------------------------
 
-    return hw, labs, controls
+
+@connection
+async def get_active_homework_of(
+    session: AsyncSession, s: Student
+) -> AnyHomework | None:
+    """Return the student's homework for the currently active type, or None."""
+    settings = await _get_active_hw_settings(session)
+    if settings is None:
+        return None
+    return await _get_homework_of_type(session, s, settings.hw_type)
+
+
+@connection
+async def get_free_active_homework(session: AsyncSession) -> AnyHomework | None:
+    """Return an unassigned homework record for the currently active type."""
+    settings = await _get_active_hw_settings(session)
+    if settings is None:
+        return None
+    HW = _get_hw_class(settings.hw_type)
+    return await session.scalar(select(HW).where(HW.student_id.is_(None)))
+
+
+# ---------------------------------------------------------------------------
+# Публичный API — Homework (teacher-facing / legacy, uses explicit sem)
+# ---------------------------------------------------------------------------
+
+
+@connection
+async def get_homework_of(session: AsyncSession, s: Student, sem: int):
+    """Get homework by semester number (used in teacher flows and tests)."""
+    return await _get_homework_of(session, s, sem)
+
+
+@connection
+async def get_homework_of_type(session: AsyncSession, s: Student, hw_type: str):
+    """Get homework by explicit hw_type string."""
+    return await _get_homework_of_type(session, s, hw_type)
+
+
+@connection
+async def get_free_homework(session: AsyncSession, sem: int):
+    HW = _get_semester_hw(sem)
+    return await session.scalar(select(HW).where(HW.student_id.is_(None)))
+
+
+@connection
+async def set_homework(session: AsyncSession, s: Student, hw: AnyHomework):
+    HW = type(hw)
+    await session.execute(update(HW).where(HW.id == hw.id).values(student_id=s.id))
+    await session.commit()
+
+
+@connection
+async def approve_homework(
+    session: AsyncSession, student: Student, date: ddate, sem: int
+):
+    HW = _get_semester_hw(sem)
+    await session.execute(
+        update(HW)
+        .where(HW.student_id == student.id)
+        .values(approve_date=date, approved=True)
+    )
+    await session.commit()
+
+
+@connection
+async def get_students_homeworks(session: AsyncSession, sem: int):
+    HW = _get_semester_hw(sem)
+    return await session.scalars(select(HW).where(HW.student_id.isnot(None)))
+
+
+@connection
+async def send_homework(session: AsyncSession, hw: AnyHomework):
+    HW = type(hw)
+    await session.execute(update(HW).where(HW.id == hw.id).values(send=True))
+    await session.commit()
+
+
+@connection
+async def assess_homework(session: AsyncSession, data: dict, sem: int):
+    HW = _get_semester_hw(sem)
+    student = data["student"]
+    points = data["points"]
+    date = data["date"]
+
+    await session.execute(
+        update(HW)
+        .where(HW.student_id == student.id)
+        .values(done=True, done_date=date, points=points)
+    )
+    await session.commit()
+
+
+# ---------------------------------------------------------------------------
+# Публичный API — Labs
+# ---------------------------------------------------------------------------
+
+
+@connection
+async def get_lab_of(session: AsyncSession, s: Student, lab_n: int):
+    return await _get_lab_of(session, s, lab_n)
+
+
+@connection
+async def get_free_lab(session: AsyncSession, lab_n: int):
+    return await session.scalar(
+        select(Lab).where(Lab.lab_number == lab_n, Lab.student_id.is_(None))
+    )
+
+
+@connection
+async def set_lab(session: AsyncSession, s: Student, lab: Lab):
+    await session.execute(update(Lab).where(Lab.id == lab.id).values(student_id=s.id))
+    await session.commit()
+
+
+@connection
+async def send_lab(session: AsyncSession, lab: Lab):
+    await session.execute(update(Lab).where(Lab.id == lab.id).values(send=True))
+    await session.commit()
+
+
+@connection
+async def assess_lab(session: AsyncSession, data: dict, lab: Lab):
+    points = data["points"]
+    date = data["date"]
+
+    await session.execute(
+        update(Lab)
+        .where(Lab.id == lab.id)
+        .values(done=True, done_date=date, points=points)
+    )
+    await session.commit()
+
+
+# ---------------------------------------------------------------------------
+# Публичный API — Controls
+# ---------------------------------------------------------------------------
 
 
 @connection
 async def get_controls_of(session: AsyncSession, s: Student, sem: int):
+    """Return two control works for the given semester (teacher flow)."""
     return await _get_controls_of(session, s, sem)
 
 
 @connection
+async def get_all_controls_of(session: AsyncSession, s: Student):
+    """Return all four control works for the student, sorted by control_number."""
+    return await _get_all_controls_of(session, s)
+
+
+@connection
 async def set_control_points_of(session: AsyncSession, controls: list[ControlWork]):
-    """Сохраняет очки для каждой контрольной работы в списке."""
+    """Save points for each control work in the list."""
     for cw in controls:
         await session.execute(
             update(ControlWork).where(ControlWork.id == cw.id).values(points=cw.points)
         )
     await session.commit()
+
+
+# ---------------------------------------------------------------------------
+# Публичный API — Progress
+# ---------------------------------------------------------------------------
+
+
+@connection
+async def get_progress_of(session: AsyncSession, s: Student):
+    """Return (hw_nozzle_points, hw_wedge_points, labs[6], controls[4]) for a student.
+
+    Each entry is the points value (int) or None if not done/not assigned.
+    """
+    hw_nozzle = await _get_homework_of_type(session, s, HW_TYPE_NOZZLE)
+    hw_wedge = await _get_homework_of_type(session, s, HW_TYPE_SHOCK_WEDGE)
+
+    hw_nozzle_points = hw_nozzle.points if hw_nozzle else None
+    hw_wedge_points = hw_wedge.points if hw_wedge else None
+
+    labs = [await _get_lab_of(session, s, n) for n in range(1, 7)]
+    lab_points = [lab.points if lab else None for lab in labs]
+
+    controls = await _get_all_controls_of(session, s)
+
+    return hw_nozzle_points, hw_wedge_points, lab_points, controls
+
+
+# ---------------------------------------------------------------------------
+# Публичный API — Misc
+# ---------------------------------------------------------------------------
 
 
 @connection

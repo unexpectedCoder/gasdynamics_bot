@@ -1,67 +1,8 @@
 from datetime import date
-from unittest.mock import patch
 
 import pytest
 
-from app.utils.seasons import get_current_semester, rus_date
-
-# ---------------------------------------------------------------------------
-# get_current_semester
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("month", [2, 3, 4, 5, 6, 7, 8])
-def test_get_current_semester_returns_1_for_spring_months(month):
-    mock_date = date(2024, month, 15)
-    with patch("app.utils.seasons.date") as mock_dt:
-        mock_dt.today.return_value = mock_date
-        result = get_current_semester()
-    assert result == 1
-
-
-@pytest.mark.parametrize("month", [9, 10, 11, 12, 1])
-def test_get_current_semester_returns_2_for_autumn_months(month):
-    year = 2024 if month != 1 else 2025
-    mock_date = date(year, month, 15)
-    with patch("app.utils.seasons.date") as mock_dt:
-        mock_dt.today.return_value = mock_date
-        result = get_current_semester()
-    assert result == 2
-
-
-def test_get_current_semester_february_is_sem_1():
-    with patch("app.utils.seasons.date") as mock_dt:
-        mock_dt.today.return_value = date(2024, 2, 1)
-        assert get_current_semester() == 1
-
-
-def test_get_current_semester_august_is_sem_1():
-    with patch("app.utils.seasons.date") as mock_dt:
-        mock_dt.today.return_value = date(2024, 8, 31)
-        assert get_current_semester() == 1
-
-
-def test_get_current_semester_september_is_sem_2():
-    with patch("app.utils.seasons.date") as mock_dt:
-        mock_dt.today.return_value = date(2024, 9, 1)
-        assert get_current_semester() == 2
-
-
-def test_get_current_semester_january_is_sem_2():
-    with patch("app.utils.seasons.date") as mock_dt:
-        mock_dt.today.return_value = date(2025, 1, 15)
-        assert get_current_semester() == 2
-
-
-def test_get_current_semester_returns_int():
-    result = get_current_semester()
-    assert isinstance(result, int)
-
-
-def test_get_current_semester_is_1_or_2():
-    result = get_current_semester()
-    assert result in (1, 2)
-
+from app.utils.seasons import rus_date
 
 # ---------------------------------------------------------------------------
 # rus_date

@@ -1,6 +1,7 @@
 import os
 from datetime import date
 from enum import Enum
+from typing import Literal
 
 from sqlalchemy import BigInteger, Date, ForeignKey, String, UniqueConstraint
 from sqlalchemy.ext.asyncio import AsyncAttrs, async_sessionmaker, create_async_engine
@@ -34,9 +35,24 @@ class Base(AsyncAttrs, DeclarativeBase):
     pass
 
 
+HW_TYPE_NOZZLE: Literal["nozzle"] = "nozzle"
+HW_TYPE_SHOCK_WEDGE: Literal["shock_wedge"] = "shock_wedge"
+HW_TYPES = (HW_TYPE_NOZZLE, HW_TYPE_SHOCK_WEDGE)
+
+
+class HomeworkSettings(Base):
+    """Per-homework-type availability settings managed by the teacher."""
+
+    __tablename__ = "homework_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    hw_type: Mapped[str] = mapped_column(String(32), unique=True)
+    available: Mapped[bool] = mapped_column(default=False)
+    deadline: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+
 class HomeworkMixin:
     id: Mapped[int] = mapped_column(primary_key=True)
-    deadline: Mapped[date | None] = mapped_column(Date, nullable=True)
     approved: Mapped[bool] = mapped_column(default=False)
     approve_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     send: Mapped[bool] = mapped_column(default=False)
@@ -227,3 +243,18 @@ AnyHomework = HomeworkNozzle | HomeworkShockWedge
 async def async_main():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    await _ensure_homework_settings()
+
+
+async def _ensure_homework_settings():
+    """Create HomeworkSettings rows for each hw type if they don't exist yet."""
+    from sqlalchemy import select
+
+    async with async_session() as session:
+        for hw_type in HW_TYPES:
+            exists = await session.scalar(
+                select(HomeworkSettings).where(HomeworkSettings.hw_type == hw_type)
+            )
+            if not exists:
+                session.add(HomeworkSettings(hw_type=hw_type, available=False))
+        await session.commit()

@@ -18,7 +18,7 @@ from app.constants import MARK_RIGHT, MARK_WRONG
 from app.filters import IsStudent
 from app.states import BotCheckHomework, SendHomeworkReport, SendLabReport
 from app.utils.cancel_or import cancel_or
-from app.utils.seasons import get_current_semester, rus_date
+from app.utils.seasons import rus_date
 
 router = Router()
 router.message.filter(IsStudent())
@@ -28,26 +28,35 @@ router.message.outer_middleware(ChatActionMiddleware())
 @router.message(F.text.casefold().startswith("домашнее задание"))
 @router.message(Command("homework"))
 async def homework(message: Message):
+    settings = await rq.get_active_hw_settings()
+    if settings is None:
+        await message.answer("ДЗ пока не открыто преподавателем")
+        return
     student = await rq.get_student_by_tg(message.from_user.id)
-    hw = await rq.get_homework_of(student, get_current_semester())
+    hw = await rq.get_active_homework_of(student)
     await message.answer(
-        "Выберите действие 👇", reply_markup=ikb.homework_builder(hw.approved)
+        "Выберите действие 👇",
+        reply_markup=ikb.homework_builder(hw.approved if hw else False),
     )
 
 
 @router.callback_query(F.data == "homework:get")
 async def get_homework(cb: CallbackQuery):
-    user_id = cb.from_user.id
-    student = await rq.get_student_by_tg(user_id)
-    sem = get_current_semester()
-    work = await rq.get_homework_of(student, sem)
+    settings = await rq.get_active_hw_settings()
+    if settings is None:
+        await cb.message.edit_text("ДЗ пока не открыто преподавателем")
+        await cb.answer()
+        return
+
+    student = await rq.get_student_by_tg(cb.from_user.id)
+    work = await rq.get_active_homework_of(student)
 
     if work:
         await cb.message.edit_text(f"Вам уже выдан вариант ДЗ № {work.variant}")
         await cb.answer()
         return
 
-    free = await rq.get_free_homework(sem)
+    free = await rq.get_free_active_homework()
     if not free:
         await cb.message.edit_text(
             "Свободных вариантов ДЗ не осталось, обратитесь к преподавателю..."
@@ -70,12 +79,21 @@ async def get_homework(cb: CallbackQuery):
 async def get_homework_description(cb: CallbackQuery):
     await cb.message.delete()
 
-    sem = get_current_semester()
-    hw_theme = "homework_nozzle" if sem == 1 else "homework_shock_wedge"
+    settings = await rq.get_active_hw_settings()
+    if settings is None:
+        await cb.bot.send_message(
+            cb.message.chat.id, "ДЗ пока не открыто преподавателем"
+        )
+        await cb.answer()
+        return
+
+    hw_theme = (
+        "homework_nozzle" if settings.hw_type == "nozzle" else "homework_shock_wedge"
+    )
     answer = cfg.get_answer(hw_theme)
 
     student = await rq.get_student_by_tg(cb.from_user.id)
-    work = await rq.get_homework_of(student, sem)
+    work = await rq.get_active_homework_of(student)
 
     if work is not None:
         answer = f"{answer}\n\n{work}"
@@ -86,7 +104,7 @@ async def get_homework_description(cb: CallbackQuery):
 
 @router.callback_query(F.data == "homework:deadline")
 async def get_homework_deadline(cb: CallbackQuery):
-    deadline = await rq.get_homework_deadline(get_current_semester())
+    deadline = await rq.get_homework_deadline()
     if not deadline:
         text = "Срок сдачи ДЗ не установлен"
     else:
@@ -97,8 +115,15 @@ async def get_homework_deadline(cb: CallbackQuery):
 
 @router.callback_query(F.data == "homework:results_template")
 async def get_homework_results_template(cb: CallbackQuery):
-    sem = get_current_semester()
-    hw_file_key = "hw_nozzle_template" if sem == 1 else "hw_wedge_template"
+    settings = await rq.get_active_hw_settings()
+    if settings is None:
+        await cb.message.edit_text("ДЗ пока не открыто преподавателем")
+        await cb.answer()
+        return
+
+    hw_file_key = (
+        "hw_nozzle_template" if settings.hw_type == "nozzle" else "hw_wedge_template"
+    )
     template_path = cfg.get_file(hw_file_key)
 
     if not os.path.exists(template_path):
@@ -109,7 +134,7 @@ async def get_homework_results_template(cb: CallbackQuery):
         return
 
     # Trying to find a cached file
-    cache_key = f"hw_template_{sem}"
+    cache_key = f"hw_template_{settings.hw_type}"
     file_id = cfg.get_link(cache_key)
     msg = await cb.bot.send_document(
         cb.message.chat.id,
@@ -132,15 +157,13 @@ async def get_homework_template_code(cb: CallbackQuery):
 
 @router.callback_query(F.data == "homework:mark")
 async def get_homework_mark(cb: CallbackQuery):
-    sem = get_current_semester()
     s = await rq.get_student_by_tg(cb.from_user.id)
-    w = await rq.get_homework_of(s, sem)
-    done_date = rus_date(w.done_date)
-    points = w.points
+    w = await rq.get_active_homework_of(s)
 
-    if points is None:
+    if w is None or w.points is None:
         await cb.message.edit_text("Оценка вашему ДЗ не выставлена")
     else:
+        done_date = rus_date(w.done_date)
         await cb.message.edit_text(
             f"Оценка за ДЗ - {w.points} баллов (дата: {done_date})"
         )
@@ -156,9 +179,14 @@ async def homework_algo(cb: CallbackQuery):
 
 @router.callback_query(F.data == "homework:bot_check", default_state)
 async def homework_bot_check(cb: CallbackQuery, state: FSMContext):
-    sem = get_current_semester()
+    settings = await rq.get_active_hw_settings()
+    if settings is None:
+        await cb.message.edit_text("ДЗ пока не открыто преподавателем")
+        await cb.answer()
+        return
+
     student = await rq.get_student_by_tg(cb.from_user.id)
-    work = await rq.get_homework_of(student, sem)
+    work = await rq.get_active_homework_of(student)
 
     if work is None:
         await cb.message.edit_text(
@@ -172,6 +200,8 @@ async def homework_bot_check(cb: CallbackQuery, state: FSMContext):
         await cb.answer()
         return
 
+    # sem is derived from hw_type for the checker
+    sem = 1 if settings.hw_type == "nozzle" else 2
     await state.set_state(BotCheckHomework.send_num_solution)
     await state.update_data(sem=sem, student=student, work=work)
 
@@ -271,9 +301,14 @@ async def check_homework_cancel(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "homework:send_report", default_state)
 async def send_homework_report(cb: CallbackQuery, state: FSMContext):
-    sem = get_current_semester()
+    settings = await rq.get_active_hw_settings()
+    if settings is None:
+        await cb.message.edit_text("ДЗ пока не открыто преподавателем")
+        await cb.answer()
+        return
+
     s = await rq.get_student_by_tg(cb.from_user.id)
-    w = await rq.get_homework_of(s, sem)
+    w = await rq.get_active_homework_of(s)
 
     if w is None:
         await cb.message.edit_text("Вы ещё не получили (не взяли) ДЗ")
@@ -284,6 +319,7 @@ async def send_homework_report(cb: CallbackQuery, state: FSMContext):
         await cb.answer()
         return
 
+    sem = 1 if settings.hw_type == "nozzle" else 2
     await state.set_state(SendHomeworkReport.send_pdf)
     await state.update_data(student=s, work=w, sem=sem)
     await cb.bot.send_message(
@@ -470,31 +506,28 @@ async def send_lab_cancel(message: Message, state: FSMContext):
 @router.message(Command("progress"))
 async def progress(message: Message):
     student = await rq.get_student_by_tg(message.from_user.id)
-    semesters = [i for i in range(1, get_current_semester() + 1)]
-    homeworks = [await rq.get_homework_of(student, sem) for sem in semesters]
-    labs_n = (1, 2, 3), (4, 5, 6)
-    labs = [
-        await rq.get_lab_of(student, n) for sem in semesters for n in labs_n[sem - 1]
-    ]
+
+    hw_nozzle = await rq.get_homework_of_type(student, "nozzle")
+    hw_wedge = await rq.get_homework_of_type(student, "shock_wedge")
 
     answer = "Успеваемость:\n\n"
+
     homeworks_text = ""
-    for i, work in enumerate(homeworks, start=1):
+    for label, work in [("ДЗ (сопло)", hw_nozzle), ("ДЗ (клин)", hw_wedge)]:
         if not work or not work.done:
-            homeworks_text = homeworks_text + f"- ДЗ {i}-го семестра *не сдано*\n"
-            continue
-        homeworks_text = (
-            homeworks_text + f"- ДЗ {i}-го семестра - {work.points} баллов\n"
-        )
+            homeworks_text += f"- {label} *не сдано*\n"
+        else:
+            homeworks_text += f"- {label} - {work.points} баллов\n"
 
     labs_text = ""
-    for i, work in enumerate(labs, start=1):
-        if not work or not work.done:
-            labs_text = labs_text + f"- ЛР № {i} *не выполнена*\n"
-            continue
-        labs_text = labs_text + f"- ЛР № {i} - {work.points} баллов\n"
+    for i in range(1, 7):
+        lab = await rq.get_lab_of(student, i)
+        if not lab or not lab.done:
+            labs_text += f"- ЛР № {i} *не выполнена*\n"
+        else:
+            labs_text += f"- ЛР № {i} - {lab.points} баллов\n"
 
-    await message.answer(answer + homeworks_text + labs_text)
+    await message.answer(answer + homeworks_text + "\n" + labs_text)
 
 
 @router.message(Command("kb"))
