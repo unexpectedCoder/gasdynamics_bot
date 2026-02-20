@@ -101,10 +101,10 @@ class Student(Base):
         name = self.get_name()
         if self.tg_id:
             return (
-                f"{self.group} [{name}](tg://user?id={self.tg_id}) "
-                f"(зачётка {self.mark_book})"
+                f"[{name}](tg://user?id={self.tg_id}) "
+                f"(группа {self.group}, зачётка {self.mark_book})"
             )
-        return f"{self.group} {name} (зачётка {self.mark_book})"
+        return f"{name} (группа {self.group}, зачётка {self.mark_book})"
 
     def get_name(self):
         return f"{self.lastname} {self.firstname} {self.middlename}"
@@ -116,7 +116,7 @@ class ControlWork(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     control_number: Mapped[int] = mapped_column()
     approved: Mapped[bool] = mapped_column(default=False)
-    points: Mapped[int] = mapped_column(default=0)
+    points: Mapped[int | None] = mapped_column(nullable=True)
     student_id: Mapped[int | None] = mapped_column(
         ForeignKey("students.id"), nullable=True
     )

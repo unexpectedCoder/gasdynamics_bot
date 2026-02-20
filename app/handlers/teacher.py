@@ -47,8 +47,8 @@ async def homework(cb: CallbackQuery):
     if settings is None:
         status = "ДЗ закрыто"
     else:
-        label = "сопло" if settings.hw_type == "nozzle" else "клин"
-        status = f"Открыто ДЗ ({label})"
+        label = 1 if settings.hw_type == "nozzle" else 2
+        status = f"Открыто ДЗ № {label}"
     await cb.message.edit_text(
         f"Выберите действие с ДЗ 👇\n_Статус: {status}_",
         reply_markup=ikb.homework_t,
@@ -60,9 +60,9 @@ async def homework(cb: CallbackQuery):
 async def open_homework(cb: CallbackQuery):
     hw_type = cb.data.removeprefix("homework:open_")
     await rq.set_hw_available(hw_type, True)
-    label = "сопло (ДЗ №1)" if hw_type == "nozzle" else "клин (ДЗ №2)"
+    label = "№ 1" if hw_type == "nozzle" else "№ 2"
     await cb.message.edit_text(
-        f"ДЗ ({label}) открыто для студентов ✅", reply_markup=ikb.homework_t
+        f"ДЗ {label}) открыто для студентов ✅", reply_markup=ikb.homework_t
     )
     await cb.answer()
 
@@ -266,7 +266,7 @@ async def exam_controlling(cb: CallbackQuery, state: FSMContext):
     groups = [s.group for s in students]
 
     def _pts(c_list, idx):
-        return c_list[idx].points if c_list and len(c_list) > idx else 0
+        return c_list[idx].points if c_list and len(c_list) > idx else None
 
     progress = pd.DataFrame(
         {
@@ -561,7 +561,7 @@ async def students_progress(cb: CallbackQuery):
     groups = [s.group for s in students]
 
     def _rk(c_list, idx):
-        return 0 if not c_list or len(c_list) <= idx else (c_list[idx].points or 0)
+        return None if not c_list or len(c_list) <= idx else c_list[idx].points
 
     progress = pd.DataFrame(
         {
@@ -571,8 +571,8 @@ async def students_progress(cb: CallbackQuery):
             "РК 2": [_rk(c, 1) for c in controls],
             "РК 3": [_rk(c, 2) for c in controls],
             "РК 4": [_rk(c, 3) for c in controls],
-            "ДЗ сопло": hw_nozzle,
-            "ДЗ клин": hw_wedge,
+            "ДЗ 1": hw_nozzle,
+            "ДЗ 2": hw_wedge,
             **{f"ЛР № {i + 1}": lab_points[i] for i in range(6)},
         }
     ).sort_values(by=["Группа", "ФИО"])
@@ -603,9 +603,9 @@ async def students_list(cb: CallbackQuery):
 
         for i, s in enumerate(students[group], start=1):
             if not s.tg_id:
-                text = f"  {i}. {s.lastname} {s.firstname}"
+                text = f"  {i}. {s.lastname} {s.firstname} ({s.mark_book})"
             else:
-                text = f"  {i}. [{s.lastname} {s.firstname}](tg://user?id={s.tg_id})"
+                text = f"  {i}. [{s.lastname} {s.firstname}](tg://user?id={s.tg_id}) ({s.mark_book})"
 
             hw_n = await rq.get_homework_of_type(s, "nozzle")
             hw_w = await rq.get_homework_of_type(s, "shock_wedge")
@@ -621,8 +621,9 @@ async def students_list(cb: CallbackQuery):
     await cb.answer()
 
 
-@router.callback_query(F.data == "students:add", default_state)
+@router.callback_query(F.data == "students:add")
 async def add_student(cb: CallbackQuery, state: FSMContext):
+    await state.clear()
     await state.set_state(AddStudent.name)
     await cb.message.edit_text(cancel_or("ФИО студента >>>"))
     await cb.answer()
@@ -642,7 +643,15 @@ async def give_student_name(message: Message, state: FSMContext):
     await message.answer(cancel_or("Группа >>>"))
 
 
-@router.message(AddStudent.group, F.text.casefold().regexp(r"^см6-\d{2,3}$"))
+@router.message(AddStudent.name)
+async def give_student_name_invalid(message: Message):
+    await message.answer(
+        "⚠️ Неверный формат. Введите ФИО через пробел, три слова:\n"
+        "Например: Иванов Иван Иванович"
+    )
+
+
+@router.message(AddStudent.group, F.text.regexp(r"^\d$"))
 async def give_student_group(message: Message, state: FSMContext):
     group = message.text.upper()
     await state.update_data(group=group)
@@ -650,9 +659,14 @@ async def give_student_group(message: Message, state: FSMContext):
     await message.answer(cancel_or("Номер зачётки >>>"))
 
 
-@router.message(AddStudent.mark_book, F.text.regexp(r"^\d{2}М\d{3}$"))
+@router.message(AddStudent.group)
+async def give_student_group_invalid(message: Message):
+    await message.answer("⚠️ Неверный формат группы. Например: СМ6-31")
+
+
+@router.message(AddStudent.mark_book, F.text.regexp(r"^\d{2}[мМM]\d{3}$"))
 async def give_student_mark_book(message: Message, state: FSMContext):
-    mark_book = message.text.upper()
+    mark_book = message.text.upper().replace("M", "М")
     await state.update_data(mark_book=mark_book)
     data = await state.get_data()
     await state.clear()
@@ -664,23 +678,29 @@ async def give_student_mark_book(message: Message, state: FSMContext):
     await message.answer(f"{student} уже есть в БД", reply_markup=kb.teacher)
 
 
+@router.message(AddStudent.mark_book)
+async def give_student_mark_book_invalid(message: Message):
+    await message.answer("⚠️ Неверный формат зачётки. Например: 22М123")
+
+
 @router.message(StateFilter(AddStudent), Command("cancel"))
 async def add_student_cancel(message: Message, state: FSMContext):
     await state.clear()
     await message.answer("Добавление студента отменено")
 
 
-@router.callback_query(F.data == "students:remove", default_state)
+@router.callback_query(F.data == "students:remove")
 async def remove_student(cb: CallbackQuery, state: FSMContext):
+    await state.clear()
     await state.set_state(RemoveStudent.mark_book)
     await cb.message.edit_text(cancel_or("Номер зачётной книжки >>>"))
     await cb.answer()
 
 
-@router.message(RemoveStudent.mark_book, F.text.regexp(r"^\d{2}М\d{3}$"))
+@router.message(RemoveStudent.mark_book, F.text.regexp(r"^\d{2}[мМM]\d{3}$"))
 async def remove_student_by_mark_book(message: Message, state: FSMContext):
     await state.clear()
-    mb = message.text
+    mb = message.text.upper().replace("M", "М")
     s = await rq.get_student_by_mark_book(mb)
     if s is not None:
         await rq.delete_student(s)
@@ -689,6 +709,11 @@ async def remove_student_by_mark_book(message: Message, state: FSMContext):
         )
         return
     await message.answer(f"Не найден студен с зачётной книжкой {mb}")
+
+
+@router.message(RemoveStudent.mark_book)
+async def remove_student_by_mark_book_invalid(message: Message):
+    await message.answer("⚠️ Неверный формат зачётки. Например: 22М123")
 
 
 @router.message(StateFilter(RemoveStudent), Command("cancel"))
@@ -702,7 +727,7 @@ async def students_stats(cb: CallbackQuery):
     await cb.message.delete()
 
     students = list(await rq.get_students())
-    answer = "Статистика:\n\n"
+    answer = "*Статистика*\n"
 
     def _hw_status(work, label: str) -> str:
         if not work or work.student_id is None:
@@ -718,7 +743,7 @@ async def students_stats(cb: CallbackQuery):
         answer = answer + f"{i}. {s}\n"
         hw_n = await rq.get_homework_of_type(s, "nozzle")
         hw_w = await rq.get_homework_of_type(s, "shock_wedge")
-        text = _hw_status(hw_n, "ДЗ (сопло)") + "\n" + _hw_status(hw_w, "ДЗ (клин)")
+        text = _hw_status(hw_n, "ДЗ № 1") + "\n" + _hw_status(hw_w, "ДЗ № 2")
         answer = answer + text + "\n"
         if i % 10 == 0:
             await cb.bot.send_message(cb.message.chat.id, answer)
