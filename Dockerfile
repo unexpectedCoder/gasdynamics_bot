@@ -13,5 +13,3 @@ ENV IN_DOCKER=true
 COPY . .
 
 ENTRYPOINT ["python", "run.py"]
-
-VOLUME ["/labs", "/vault", "/db_data", "/logging"]
