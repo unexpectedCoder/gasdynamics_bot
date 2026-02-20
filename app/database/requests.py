@@ -52,12 +52,20 @@ async def fill_database():
         await session.commit()
 
 
+def _require_setting(value, name: str):
+    if value is None or (isinstance(value, str) and value.strip() == ""):
+        raise RuntimeError(f"Не задано значение {name} в настройках")
+    return value
+
+
 def _init_teachers(session: AsyncSession):
     owner = {
-        "firstname": os.getenv("OWNER_FIRSTNAME"),
-        "middlename": os.getenv("OWNER_MIDDLENAME"),
-        "lastname": os.getenv("OWNER_LASTNAME"),
-        "tg_id": os.getenv("OWNER_ID"),
+        "firstname": _require_setting(cfg.settings.owner_firstname, "OWNER_FIRSTNAME"),
+        "middlename": _require_setting(
+            cfg.settings.owner_middlename, "OWNER_MIDDLENAME"
+        ),
+        "lastname": _require_setting(cfg.settings.owner_lastname, "OWNER_LASTNAME"),
+        "tg_id": _require_setting(cfg.settings.owner_id, "OWNER_ID"),
     }
     session.add(Teacher(**owner))
 

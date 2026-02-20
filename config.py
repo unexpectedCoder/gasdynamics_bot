@@ -34,7 +34,7 @@ class Files(BaseModel):
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file="secrets/.env",
+        env_file=Path("secrets/.env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     # Из .env
     token: str
     owner_id: int
+    owner_firstname: str
+    owner_middlename: str
+    owner_lastname: str
     in_docker: bool = False
 
     # Числовые настройки

@@ -1,9 +1,53 @@
 {
-    "group_id": {
-        "mark_book_id": {
-            "lastname": "Lastname",
-            "firstname": "Firstname",
-            "middlename": "Middlename"
-        }
+  "1": {
+    "15М239": {
+      "lastname": "Петин",
+      "firstname": "Алексей",
+      "middlename": "Владимирович"
+    },
+    "15М777": {
+      "lastname": "Иванов",
+      "firstname": "Иван",
+      "middlename": "Иванович"
+    },
+    "14М891": {
+      "lastname": "Петров",
+      "firstname": "Петр",
+      "middlename": "Петрович"
     }
+  },
+  "2": {
+    "15М377": {
+      "lastname": "Сидоров",
+      "firstname": "Сидор",
+      "middlename": "Сидорович"
+    },
+    "14М013": {
+      "lastname": "Кузнецов",
+      "firstname": "Кузьма",
+      "middlename": "Кузьмович"
+    },
+    "14М704": {
+      "lastname": "Смирнов",
+      "firstname": "Сергей",
+      "middlename": "Сергеевич"
+    }
+  },
+  "9": {
+    "15М029": {
+      "lastname": "Сидорова",
+      "firstname": "Анастасия",
+      "middlename": "Олеговна"
+    },
+    "15М113": {
+      "lastname": "Кузнецова",
+      "firstname": "Виктория",
+      "middlename": "Викторовна"
+    },
+    "15М105": {
+      "lastname": "Смирнов",
+      "firstname": "Олег",
+      "middlename": "Алексеевич"
+    }
+  }
 }
