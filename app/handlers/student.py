@@ -340,8 +340,28 @@ async def check_home_yaml_cancel(message: Message, state: FSMContext):
 @router.message(F.text.casefold().startswith("лабораторные работы"))
 @router.message(Command("labwork"))
 async def labs(message: Message):
-    sem = get_current_semester()
-    await message.answer("Выберите ЛР 👇", reply_markup=ikb.labwork(sem))
+    labs_dir = cfg.get_dir("labs")
+    try:
+        entries = os.listdir(labs_dir)
+    except OSError:
+        entries = []
+
+    lab_numbers = sorted(
+        [
+            int(f[4:-4])
+            for f in entries
+            if f.startswith("lab_") and f.endswith(".pdf") and f[4:-4].isdigit()
+        ]
+    )
+
+    if not lab_numbers:
+        await message.answer(
+            "Пока нет ни одной лабораторной работы. "
+            "Она появится, как только преподаватель её загрузит."
+        )
+        return
+
+    await message.answer("Выберите ЛР 👇", reply_markup=ikb.labwork(lab_numbers))
 
 
 @router.callback_query(F.data.regexp(r"^lab:\d$"))
@@ -356,9 +376,7 @@ async def labs_actions(cb: CallbackQuery):
 @router.callback_query(F.data.regexp(r"^lab:description_\d$"))
 async def lab_description(cb: CallbackQuery):
     lab_i = int(cb.data[-1])
-    path = os.path.join(cfg.get_dir(f"labs"), f"lab_{lab_i}.pdf")
-    if lab_i not in range(1, 7):
-        raise ValueError(f"invalid lab work's number {lab_i}")
+    path = os.path.join(cfg.get_dir("labs"), f"lab_{lab_i}.pdf")
 
     doc_id = cfg.get_link(f"lab_{lab_i}")
     doc = FSInputFile(path, f"ЛР {lab_i}.pdf") if not doc_id else None

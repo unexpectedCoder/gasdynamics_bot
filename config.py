@@ -1,5 +1,4 @@
 import json
-import os
 from pathlib import Path
 
 from pydantic import BaseModel, computed_field
@@ -61,16 +60,17 @@ class Settings(BaseSettings):
 settings = Settings()
 
 
-def get_dir(key: str) -> str:
-    raw = getattr(settings.dirs, key)
-    if settings.in_docker and raw.startswith("/"):
-        return os.path.join("/", *raw.split("/"))
-    return os.path.join(*raw.split("/"))
+def get_dir(key: str) -> Path:
+    raw: Path = getattr(settings.dirs, key)
+    if raw.is_absolute() and not settings.in_docker:
+        # Вне контейнера: /vault/... → vault/...
+        return Path(*raw.parts[1:])
+    return raw
 
 
-def get_file(key: str) -> str:
-    raw = getattr(settings.files, key)
-    return os.path.join(*raw.split("/"))
+def get_file(key: str) -> Path:
+    raw: str = getattr(settings.files, key)
+    return Path(raw)
 
 
 def get_answer(handler_name: str) -> str | None:
@@ -87,12 +87,9 @@ def set_link(key: str, link: str):
 
 # Startup
 for _key in settings.dirs.model_fields:
-    _raw = getattr(settings.dirs, _key)
+    _dir = get_dir(_key)
     try:
-        if settings.in_docker and _raw.startswith("/"):
-            os.makedirs(_raw, exist_ok=True)
-        else:
-            os.makedirs(os.path.join(*_raw.split("/")), exist_ok=True)
+        _dir.mkdir(parents=True, exist_ok=True)
     except OSError as ex:
         print(ex)
 
