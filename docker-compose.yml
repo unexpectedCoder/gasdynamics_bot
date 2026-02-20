@@ -1,0 +1,23 @@
+services:
+  gasdyn_bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: unexpectedcoder/gasdyn_bot_image
+    container_name: gasdyn_bot
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: ./secrets
+        target: /usr/src/app/secrets
+        read_only: true
+      - labs:/labs
+      - vault:/vault
+      - db_data:/db_data
+      - logging:/logging
+
+volumes:
+  labs:
+  vault:
+  db_data:
+  logging:

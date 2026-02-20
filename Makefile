@@ -1,40 +1,32 @@
-volumes:
-	docker volume create labs && \
-	docker volume create vault && \
-	docker volume create db_data && \
-	docker volume create logging
+DC = docker compose
+
+.PHONY: build up run stop rm down logs ps shell rm_image
+
 build:
-	docker build -t unexpectedcoder/gasdyn_bot_image .
+	$(DC) build
 
+up:
+	$(DC) up -d
 
-run:
-	docker run -it -d \
-	--mount type=bind,src=./secrets,dst=/usr/src/app/secrets,readonly \
-	--mount source=db_data,target=/db_data \
-	--mount source=labs,target=/labs \
-	--mount source=vault,target=/vault \
-	--mount source=logging,target=/logging \
-	--name gasdyn_bot unexpectedcoder/gasdyn_bot_image
-attach:
-	docker attach gasdyn_bot
+run: up
+
 stop:
-	docker stop gasdyn_bot
+	$(DC) stop
+
 rm:
-	docker rm gasdyn_bot
+	$(DC) rm -f
+
+down:
+	$(DC) down
+
+logs:
+	$(DC) logs -f --tail=200
+
+ps:
+	$(DC) ps
+
+shell:
+	$(DC) exec gasdyn_bot sh
 
 rm_image:
 	docker image rm unexpectedcoder/gasdyn_bot_image
-
-rm_labs:
-	docker volume rm vault
-rm_vault:
-	docker volume rm vault
-rm_db:
-	docker volume rm db_data
-rm_log:
-	docker volume rm logging
-rm_volumes:
-	docker volume rm labs && \
-	docker volume rm vault && \
-	docker volume rm db_data && \
-	docker volume rm logging
