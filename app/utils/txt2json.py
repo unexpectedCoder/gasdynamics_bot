@@ -8,14 +8,16 @@ def txt2json(txt_path: str, json_path: str, primary_key: str):
         lines = [line for line in f.readlines()]
         for line in lines:
             s = line.split()[1:6]
-            txt_data.append({
-                "lastname": s[0],
-                "firstname": s[1],
-                "middlename": s[2],
-                "mark_book": s[3],
-                "group": s[4]
-            })
-    
+            txt_data.append(
+                {
+                    "lastname": s[0],
+                    "firstname": s[1],
+                    "middlename": s[2],
+                    "mark_book": s[3],
+                    "group": s[4][-1],
+                }
+            )
+
     groups = sorted({d["group"] for d in txt_data})
     json_data = {g: {} for g in groups}
     for d, g in product(txt_data, groups):
