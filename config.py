@@ -1,10 +1,10 @@
-import json
+import threading
 from pathlib import Path
 
 from pydantic import BaseModel, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-import app.cache as cache
+from app.utils import file_ops
 
 
 class Dirs(BaseModel):
@@ -63,6 +63,44 @@ class Settings(BaseSettings):
 settings = Settings()
 
 
+class RuntimeCache:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self.files_links: dict[str, str] = {}
+        self.bot_speech: dict = {}
+        self.answers: dict[str, str] = {}
+
+
+_runtime: RuntimeCache | None = None
+
+
+def _require_runtime() -> RuntimeCache:
+    if _runtime is None:
+        raise RuntimeError(
+            "Runtime cache is not initialized. Call init_runtime() first."
+        )
+    return _runtime
+
+
+async def init_runtime() -> RuntimeCache:
+    global _runtime
+    if _runtime is not None:
+        return _runtime
+
+    runtime = RuntimeCache()
+    for _key in settings.dirs.model_fields:
+        _dir = get_dir(_key)
+        try:
+            await file_ops.mkdir(_dir, parents=True, exist_ok=True)
+        except OSError as ex:
+            print(ex)
+
+    runtime.bot_speech = await file_ops.read_json(get_file("bot_speech"))
+    runtime.answers = runtime.bot_speech.get("answers", {})
+    _runtime = runtime
+    return runtime
+
+
 def get_dir(key: str) -> Path:
     raw: Path = getattr(settings.dirs, key)
     if raw.is_absolute() and not settings.in_docker:
@@ -77,25 +115,18 @@ def get_file(key: str) -> Path:
 
 
 def get_answer(handler_name: str) -> str | None:
-    return cache.answers.get(handler_name)
+    runtime = _require_runtime()
+    with runtime._lock:
+        return runtime.answers.get(handler_name)
 
 
 def get_link(key: str) -> str | None:
-    return cache.files_links.get(key)
+    runtime = _require_runtime()
+    with runtime._lock:
+        return runtime.files_links.get(key)
 
 
 def set_link(key: str, link: str):
-    cache.files_links[key] = link
-
-
-# Startup
-for _key in settings.dirs.model_fields:
-    _dir = get_dir(_key)
-    try:
-        _dir.mkdir(parents=True, exist_ok=True)
-    except OSError as ex:
-        print(ex)
-
-with open(get_file("bot_speech"), "r", encoding="utf-8") as f:
-    cache.bot_speech = json.load(f)
-cache.answers = cache.bot_speech["answers"]
+    runtime = _require_runtime()
+    with runtime._lock:
+        runtime.files_links[key] = link

@@ -1,4 +1,4 @@
-import json
+import asyncio
 import os
 from datetime import date
 
@@ -17,6 +17,7 @@ from app.checker import all_right, check_solution_json, whats_wrong
 from app.constants import MARK_RIGHT, MARK_WRONG
 from app.filters import IsStudent
 from app.states import BotCheckHomework, SendHomeworkReport, SendLabReport
+from app.utils import file_ops
 from app.utils.cancel_or import cancel_or
 from app.utils.seasons import rus_date
 
@@ -238,21 +239,13 @@ async def send_homework2bot(message: Message, state: FSMContext):
 
 
 async def _check_json(message: Message, data: dict):
-    doc = data["send_file"]
     sem = data["sem"]
     doc_dir = cfg.get_dir(f"sem_{sem}_json_to_check")
     doc_path = os.path.join(doc_dir, f"{message.from_user.id}.json")
 
-    bot = message.bot
-    file_id = doc.file_id
-    file_info = await bot.get_file(file_id)
-    file_path = file_info.file_path
-    downloaded_file = await bot.download_file(file_path, doc_path)
-
     work = data["work"]
     correct_variant = work.variant
-    with open(doc_path, "r", encoding="utf-8") as f:
-        json_data = json.load(f)
+    json_data = await file_ops.read_json(doc_path)
 
     json_variant = json_data["Информация"]["Вариант"]
     if correct_variant != json_variant:
@@ -264,7 +257,7 @@ async def _check_json(message: Message, data: dict):
         return
 
     try:
-        checked = check(doc_path, sem)
+        checked = await asyncio.to_thread(check, doc_path, sem)
     except ValueError:
         await message.answer("Файл с ответами не соответствует шаблону")
         return
@@ -285,7 +278,7 @@ async def _check_json(message: Message, data: dict):
         "текстовый отчёт в формате PDF"
     )
 
-    os.remove(doc_path)
+    await file_ops.remove(doc_path)
 
 
 def check(doc_path: str, sem: int):
@@ -362,7 +355,7 @@ async def _process_homework_report(message: Message, data: dict):
     )
 
     await message.bot.send_message(
-        os.getenv("OWNER_ID"),
+        int(cfg.settings.owner_id),
         f"{s.get_name()} прислал(а) на проверку отчёт по ДЗ вар. № {w.variant}",
     )
 
@@ -378,7 +371,7 @@ async def check_home_yaml_cancel(message: Message, state: FSMContext):
 async def labs(message: Message):
     labs_dir = cfg.get_dir("labs")
     try:
-        entries = os.listdir(labs_dir)
+        entries = await file_ops.listdir_names(labs_dir)
     except OSError:
         entries = []
 
@@ -482,17 +475,15 @@ async def send_lab_pdf(message: Message, state: FSMContext):
 
     await rq.send_lab(lab)
     dirname = os.path.join(cfg.get_dir("labs_to_check"), str(lab_i))
-    try:
-        os.mkdir(dirname)
-    except OSError:
-        pass
+    await file_ops.mkdir(dirname, parents=True, exist_ok=True)
 
     doc_path = os.path.join(dirname, f"{s.tg_id}.pdf")
     await message.bot.download(doc, doc_path)
 
     await message.answer("Работа отправлена на проверку преподавателю")
     await message.bot.send_message(
-        os.getenv("OWNER_ID"), f"{s.get_name()} прислал(а) отчёт по ЛР № {lab_i}"
+        int(cfg.settings.owner_id),
+        f"{s.get_name()} прислал(а) отчёт по ЛР № {lab_i}",
     )
 
 

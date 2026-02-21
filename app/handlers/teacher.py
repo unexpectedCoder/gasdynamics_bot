@@ -1,5 +1,4 @@
 import os
-import shutil
 import tempfile
 from datetime import date, datetime
 from random import choice as rand_choice
@@ -26,6 +25,7 @@ from app.states import (
     HomeworkDeadline,
     RemoveStudent,
 )
+from app.utils import file_ops
 from app.utils.cancel_or import cancel_or
 
 router = Router()
@@ -91,7 +91,7 @@ async def choose_homework(cb: CallbackQuery):
 async def check_homework(cb: CallbackQuery, state: FSMContext):
     sem = int(cb.data[-1])
     dirname = cfg.get_dir(f"sem_{sem}_homeworks_to_check")
-    files = os.listdir(dirname)
+    files = await file_ops.listdir_names_by_mtime(dirname)
     if not files:
         await state.clear()
         await cb.message.edit_text(f"Нет непроверенных ДЗ за {sem}-й семестр")
@@ -162,7 +162,7 @@ async def send_homework_remarks(message: Message, state: FSMContext):
     file_path = os.path.join(
         cfg.get_dir(f"sem_{sem}_homeworks_to_check"), f"{tg_id}.pdf"
     )
-    os.remove(file_path)
+    await file_ops.remove(file_path)
 
     await message.answer("Замечания высланы студенту")
     await state.clear()
@@ -203,15 +203,12 @@ async def assess_homework(message: Message, state: FSMContext):
     dst = os.path.join(
         cfg.get_dir(f"sem_{sem}_checked_homeworks"), f"{data['date'].year}"
     )
-    try:
-        os.mkdir(dst)
-    except OSError as ex:
-        print(ex)
+    await file_ops.mkdir(dst, parents=True, exist_ok=True)
 
     src = data["report_path"]
     s = data["student"]
     dst = os.path.join(dst, f"{s.group}_{s.lastname}_{s.firstname}.pdf")
-    shutil.move(src, dst)
+    await file_ops.move(src, dst)
 
     student_tg = data["student"].tg_id
     await message.bot.send_message(
@@ -315,7 +312,7 @@ async def send_controls_excel(message: Message, state: FSMContext):
     timestamp = datetime.today().strftime(r"%d-%m-%Y-%H-%M")
     dst = os.path.join(cfg.get_dir("controls"), f"controls_{timestamp}.{doc_format}")
     await message.bot.download(doc, dst)
-    excel = pd.read_excel(dst)
+    excel = await file_ops.read_excel(dst)
     for _, row in excel.iterrows():
         student = await rq.get_student_by_id(row["id"])
         controls = await rq.get_all_controls_of(student)
@@ -324,7 +321,7 @@ async def send_controls_excel(message: Message, state: FSMContext):
                 controls[i].points = row[col]
         await rq.set_control_points_of(controls)
 
-    os.remove(dst)
+    await file_ops.remove(dst)
     await message.answer("Успеваемость студентов обновлена")
 
 
@@ -351,13 +348,15 @@ async def check_lab(cb: CallbackQuery, state: FSMContext):
     lab_n = int(cb.data.rsplit("_", 1)[-1])
     dirname = os.path.join(cfg.get_dir(f"labs_to_check"), str(lab_n))
 
-    if not os.path.exists(dirname) or not os.listdir(dirname):
+    exists = await file_ops.exists(dirname)
+    files = await file_ops.listdir_names_by_mtime(dirname) if exists else []
+    if not exists or not files:
         await state.clear()
         await cb.message.edit_text(f"Нет непроверенных ЛР № {lab_n}")
         await cb.answer()
         return
 
-    f = rand_choice(os.listdir(dirname))
+    f = files[0]
     student_tg = int(f.split(".")[0])
     student = await rq.get_student_by_tg(student_tg)
     doc_path = os.path.join(dirname, f)
@@ -414,7 +413,7 @@ async def send_lab_remark(message: Message, state: FSMContext):
     file_path = os.path.join(
         cfg.get_dir(f"labs_to_check"), str(data["lab_n"]), f"{tg_id}.pdf"
     )
-    os.remove(file_path)
+    await file_ops.remove(file_path)
 
     await message.answer(f"Замечания высланы студенту")
 
@@ -443,10 +442,7 @@ async def assess_lab(message: Message, state: FSMContext):
 
     lab_n = data["lab_n"]
     dst = os.path.join(cfg.get_dir(f"checked_labs"), str(lab_n))
-    try:
-        os.mkdir(dst)
-    except OSError:
-        pass
+    await file_ops.mkdir(dst, parents=True, exist_ok=True)
 
     lab = await rq.get_lab_of(data["student"], lab_n)
     await rq.assess_lab(data, lab)
@@ -455,7 +451,7 @@ async def assess_lab(message: Message, state: FSMContext):
     s = data["student"]
     name = f"{s.lastname}_{s.firstname}"
     dst = os.path.join(dst, f"{s.group}_{name}_ЛР_{lab_n}.pdf")
-    shutil.move(src, dst)
+    await file_ops.move(src, dst)
 
     student_tg = data["student"].tg_id
     await message.bot.send_message(
@@ -684,7 +680,7 @@ async def give_student_group(message: Message, state: FSMContext):
 
 @router.message(AddStudent.group)
 async def give_student_group_invalid(message: Message):
-    await message.answer("⚠️ Неверный формат группы. Например: СМ6-31")
+    await message.answer("⚠️ Неверный формат группы. Например: 1, 2, 3 или 9")
 
 
 @router.message(AddStudent.mark_book, F.text.regexp(r"^\d{2}[мМM]\d{3}$"))
