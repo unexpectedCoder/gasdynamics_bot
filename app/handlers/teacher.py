@@ -1,7 +1,6 @@
 import os
 import tempfile
 from datetime import date, datetime
-from random import choice as rand_choice
 
 import pandas as pd
 from aiogram import F, Router
@@ -62,7 +61,7 @@ async def open_homework(cb: CallbackQuery):
     await rq.set_hw_available(hw_type, True)
     label = "№ 1" if hw_type == "nozzle" else "№ 2"
     await cb.message.edit_text(
-        f"ДЗ {label}) открыто для студентов ✅", reply_markup=ikb.homework_t
+        f"ДЗ {label} открыто для студентов ✅", reply_markup=ikb.homework_t
     )
     await cb.answer()
 
@@ -83,7 +82,14 @@ async def close_homework(cb: CallbackQuery):
 
 @router.callback_query(F.data == "homework:check")
 async def choose_homework(cb: CallbackQuery):
-    await cb.message.edit_text("Выберите ДЗ 👇", reply_markup=ikb.homework_choice)
+    settings = await rq.get_active_hw_settings()
+    if settings is None:
+        await cb.message.edit_text("Вы ещё не активировали ни одного ДЗ")
+        await cb.answer()
+        return
+    await cb.message.edit_text(
+        "Выберите ДЗ 👇", reply_markup=ikb.homework_choice_active(settings.hw_type)
+    )
     await cb.answer()
 
 
@@ -108,20 +114,24 @@ async def check_homework(cb: CallbackQuery, state: FSMContext):
     await state.set_state(AssessHomework.approve_or_remark)
     await state.update_data(student=s, homework=hw, report_path=doc_path, sem=sem)
 
-    await cb.message.delete()
-
-    name = s.get_name()
-    await cb.bot.send_document(
-        cb.message.chat.id,
-        doc,
-        caption=cancel_or(
-            f"Проверьте ДЗ вар. № {hw.variant} "
-            f"(выполнил(а) {name}, {s.group}) и выберите действие 👇"
-        ),
-        reply_markup=ikb.homework_approve_or_remark,
-    )
-
     await cb.answer()
+
+    try:
+        name = s.get_name()
+        await cb.bot.send_document(
+            cb.message.chat.id,
+            doc,
+            caption=cancel_or(
+                f"Проверьте ДЗ вар. № {hw.variant} "
+                f"(выполнил(а) {name}, {s.group}) и выберите действие 👇"
+            ),
+            reply_markup=ikb.homework_approve_or_remark,
+        )
+        await cb.message.delete()
+    except Exception as e:
+        await cb.bot.send_message(
+            cb.message.chat.id, f"Ошибка при загрузке файла: {str(e)}"
+        )
 
 
 @router.callback_query(F.data == "homework:remark", AssessHomework.approve_or_remark)
@@ -144,35 +154,42 @@ async def send_homework_remarks(message: Message, state: FSMContext):
     data = await state.get_data()
 
     tg_id = data["student"].tg_id
-    if data["doc"]:
-        await message.bot.send_document(
-            tg_id,
-            data["doc"],
-            caption="Ваша работа проверена преподавателем. "
-            "Замечания в прикреплённом файле",
-        )
-    else:
-        await message.bot.send_message(
-            tg_id,
-            f"Ваша работа проверена преподавателем.\nЗамечания 👇\n\n{data['remarks']}",
-            parse_mode=None,
-        )
-
+    hw = data["homework"]
     sem = data["sem"]
-    file_path = os.path.join(
-        cfg.get_dir(f"sem_{sem}_homeworks_to_check"), f"{tg_id}.pdf"
-    )
-    await file_ops.remove(file_path)
+    work_label = f"ДЗ №{sem} вар. {hw.variant}"
+    try:
+        if data["doc"]:
+            await message.bot.send_document(
+                tg_id,
+                data["doc"],
+                caption=f"Ваша работа ({work_label}) проверена преподавателем. "
+                "Замечания в прикреплённом файле",
+            )
+        else:
+            await message.bot.send_message(
+                tg_id,
+                f"Ваша работа проверена преподавателем.\nЗамечания к {work_label} 👇\n\n{data['remarks']}",
+                parse_mode=None,
+            )
 
-    await message.answer("Замечания высланы студенту")
-    await state.clear()
+        sem = data["sem"]
+        file_path = os.path.join(
+            cfg.get_dir(f"sem_{sem}_homeworks_to_check"), f"{tg_id}.pdf"
+        )
+        await file_ops.remove(file_path)
+
+        await message.answer("Замечания высланы студенту")
+    except Exception as e:
+        await message.answer(f"Ошибка при отправке замечаний: {str(e)}")
+    finally:
+        await state.clear()
 
 
 @router.callback_query(F.data == "homework:approve", AssessHomework.approve_or_remark)
 async def approve_homework(cb: CallbackQuery, state: FSMContext):
     data = await state.get_data()
 
-    deadline = data["homework"].deadline
+    deadline = await rq.get_homework_deadline()
     if deadline and date.today() > deadline:
         await cb.bot.send_message(
             cb.message.chat.id, cancel_or("Оцените работу (сдана с опозданием) >>>")
@@ -196,29 +213,32 @@ async def assess_homework(message: Message, state: FSMContext):
     await state.update_data(points=points)
     data = await state.get_data()
 
-    data["date"] = date.today()
-    sem = data["sem"]
-    await rq.assess_homework(data, sem)
+    try:
+        data["date"] = date.today()
+        sem = data["sem"]
+        await rq.assess_homework(data, sem)
 
-    dst = os.path.join(
-        cfg.get_dir(f"sem_{sem}_checked_homeworks"), f"{data['date'].year}"
-    )
-    await file_ops.mkdir(dst, parents=True, exist_ok=True)
+        dst = os.path.join(
+            cfg.get_dir(f"sem_{sem}_checked_homeworks"), f"{data['date'].year}"
+        )
+        await file_ops.mkdir(dst, parents=True, exist_ok=True)
 
-    src = data["report_path"]
-    s = data["student"]
-    dst = os.path.join(dst, f"{s.group}_{s.lastname}_{s.firstname}.pdf")
-    await file_ops.move(src, dst)
+        src = data["report_path"]
+        s = data["student"]
+        dst = os.path.join(dst, f"{s.group}_{s.lastname}_{s.firstname}.pdf")
+        await file_ops.move(src, dst)
 
-    student_tg = data["student"].tg_id
-    await message.bot.send_message(
-        student_tg, f"Ваше ДЗ принято преподавателем: оценка - {data['points']}"
-    )
-    await message.answer(
-        "Работа принята, информация выслана студенту", reply_markup=kb.teacher
-    )
-
-    await state.clear()
+        student_tg = data["student"].tg_id
+        await message.bot.send_message(
+            student_tg, f"Ваше ДЗ принято преподавателем: оценка - {data['points']}"
+        )
+        await message.answer(
+            "Работа принята, информация выслана студенту", reply_markup=kb.teacher
+        )
+    except Exception as e:
+        await message.answer(f"Ошибка при сохранении оценки: {str(e)}")
+    finally:
+        await state.clear()
 
 
 @router.message(StateFilter(AssessHomework), Command("cancel"))
@@ -229,10 +249,16 @@ async def cancel_homework_assess(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "homework:set_deadline", default_state)
 async def set_homework_deadline(cb: CallbackQuery, state: FSMContext):
+    settings = await rq.get_active_hw_settings()
+    if settings is None:
+        await cb.message.edit_text("Вы ещё не активировали ни одного ДЗ")
+        await cb.answer()
+        return
     await state.set_state(HomeworkDeadline.enter_date)
     await cb.message.edit_text(
         cancel_or("Введите дату сдачи ДЗ в формате `дд.мм.гггг` >>>")
     )
+    await cb.answer()
 
 
 @router.message(HomeworkDeadline.enter_date)
@@ -282,18 +308,23 @@ async def exam_controlling(cb: CallbackQuery, state: FSMContext):
 
     progress.to_excel(excel_path, index=False)
     doc = FSInputFile(excel_path, "controls.xlsx")
-    await cb.bot.send_document(
-        cb.message.chat.id,
-        doc,
-        caption=cancel_or(
-            "Проставьте РК в присланном файле и пришлите его обратно >>>"
-        ),
-    )
 
     await state.set_state(ControlsChecking.send_excel)
-
-    await cb.message.delete()
     await cb.answer()
+
+    try:
+        await cb.bot.send_document(
+            cb.message.chat.id,
+            doc,
+            caption=cancel_or(
+                "Проставьте РК в присланном файле и пришлите его обратно >>>"
+            ),
+        )
+        await cb.message.delete()
+    except Exception as e:
+        await cb.bot.send_message(
+            cb.message.chat.id, f"Ошибка при загрузке файла: {str(e)}"
+        )
 
 
 @router.message(F.document, ControlsChecking.send_excel)
@@ -309,20 +340,25 @@ async def send_controls_excel(message: Message, state: FSMContext):
         )
         return
 
-    timestamp = datetime.today().strftime(r"%d-%m-%Y-%H-%M")
-    dst = os.path.join(cfg.get_dir("controls"), f"controls_{timestamp}.{doc_format}")
-    await message.bot.download(doc, dst)
-    excel = await file_ops.read_excel(dst)
-    for _, row in excel.iterrows():
-        student = await rq.get_student_by_id(row["id"])
-        controls = await rq.get_all_controls_of(student)
-        for i, col in enumerate(["РК 1", "РК 2", "РК 3", "РК 4"]):
-            if col in row and len(controls) > i:
-                controls[i].points = row[col]
-        await rq.set_control_points_of(controls)
+    try:
+        timestamp = datetime.today().strftime(r"%d-%m-%Y-%H-%M")
+        dst = os.path.join(
+            cfg.get_dir("controls"), f"controls_{timestamp}.{doc_format}"
+        )
+        await message.bot.download(doc, dst)
+        excel = await file_ops.read_excel(dst)
+        for _, row in excel.iterrows():
+            student = await rq.get_student_by_id(row["id"])
+            controls = await rq.get_all_controls_of(student)
+            for i, col in enumerate(["РК 1", "РК 2", "РК 3", "РК 4"]):
+                if col in row and len(controls) > i:
+                    controls[i].points = row[col]
+            await rq.set_control_points_of(controls)
 
-    await file_ops.remove(dst)
-    await message.answer("Успеваемость студентов обновлена")
+        await file_ops.remove(dst)
+        await message.answer("Успеваемость студентов обновлена")
+    except Exception as e:
+        await message.answer(f"Ошибка при обработке файла: {str(e)}")
 
 
 @router.message(Command("cancel"), StateFilter(ControlsChecking))
@@ -339,7 +375,28 @@ async def labs(message: Message):
 
 @router.callback_query(F.data == "labs:check")
 async def check_labs(cb: CallbackQuery, state: FSMContext):
-    await cb.message.edit_text("Выберите ЛР 👇", reply_markup=ikb.labs_choice_t)
+    labs_dir = cfg.get_dir("labs")
+    try:
+        entries = os.listdir(labs_dir)
+    except OSError:
+        entries = []
+
+    lab_numbers = sorted(
+        [
+            int(f[4:-4])
+            for f in entries
+            if f.startswith("lab_") and f.endswith(".pdf") and f[4:-4].isdigit()
+        ]
+    )
+
+    if not lab_numbers:
+        await cb.message.edit_text("Нет выданных лабораторных работ")
+        await cb.answer()
+        return
+
+    await cb.message.edit_text(
+        "Выберите ЛР 👇", reply_markup=ikb.labs_check_choice(lab_numbers)
+    )
     await cb.answer()
 
 
@@ -365,15 +422,20 @@ async def check_lab(cb: CallbackQuery, state: FSMContext):
     await state.set_state(AssessLab.approve_or_remark)
     await state.update_data(student=student, report_path=doc_path, lab_n=lab_n)
 
-    await cb.bot.send_document(
-        cb.message.chat.id,
-        doc,
-        caption=cancel_or("Проверьте отчёт и выберите действие >>>"),
-        reply_markup=ikb.labs_approve_or_remark,
-    )
-
-    await cb.message.delete()
     await cb.answer()
+
+    try:
+        await cb.bot.send_document(
+            cb.message.chat.id,
+            doc,
+            caption=cancel_or("Проверьте отчёт и выберите действие >>>"),
+            reply_markup=ikb.labs_approve_or_remark,
+        )
+        await cb.message.delete()
+    except Exception as e:
+        await cb.bot.send_message(
+            cb.message.chat.id, f"Ошибка при загрузке файла: {str(e)}"
+        )
 
 
 @router.callback_query(F.data == "labs:remark", AssessLab.approve_or_remark)
@@ -396,26 +458,30 @@ async def send_lab_remark(message: Message, state: FSMContext):
     await state.clear()
 
     tg_id = data["student"].tg_id
-    if data["doc"]:
-        await message.bot.send_document(
-            tg_id,
-            data["doc"],
-            caption="Ваша работа проверена преподавателем. "
-            "Замечания в прикреплённом файле.",
-        )
-    else:
-        await message.bot.send_message(
-            tg_id,
-            f"Ваша работа проверена преподавателем. Замечания 👇\n\n{data['remarks']}",
-            parse_mode=None,
-        )
+    lab_n = data["lab_n"]
+    try:
+        if data["doc"]:
+            await message.bot.send_document(
+                tg_id,
+                data["doc"],
+                caption=f"Ваша работа (ЛР № {lab_n}) проверена преподавателем. "
+                "Замечания в прикреплённом файле.",
+            )
+        else:
+            await message.bot.send_message(
+                tg_id,
+                f"Ваша работа проверена преподавателем. Замечания к ЛР № {lab_n} 👇\n\n{data['remarks']}",
+                parse_mode=None,
+            )
 
-    file_path = os.path.join(
-        cfg.get_dir(f"labs_to_check"), str(data["lab_n"]), f"{tg_id}.pdf"
-    )
-    await file_ops.remove(file_path)
+        file_path = os.path.join(
+            cfg.get_dir(f"labs_to_check"), str(data["lab_n"]), f"{tg_id}.pdf"
+        )
+        await file_ops.remove(file_path)
 
-    await message.answer(f"Замечания высланы студенту")
+        await message.answer(f"Замечания высланы студенту")
+    except Exception as e:
+        await message.answer(f"Ошибка при отправке замечаний: {str(e)}")
 
 
 @router.callback_query(F.data == "labs:approve", AssessLab.approve_or_remark)
@@ -454,12 +520,15 @@ async def assess_lab(message: Message, state: FSMContext):
     await file_ops.move(src, dst)
 
     student_tg = data["student"].tg_id
-    await message.bot.send_message(
-        student_tg, f"Ваша ЛР принята преподавателем с оценкой {data['points']}"
-    )
-    await message.answer(
-        f"Отчёт по ЛР принят.\nИнформация выслана [студенту](tg://user?id={student_tg})"
-    )
+    try:
+        await message.bot.send_message(
+            student_tg, f"Ваша ЛР принята преподавателем с оценкой {data['points']}"
+        )
+        await message.answer(
+            f"Отчёт по ЛР принят.\nИнформация выслана [студенту](tg://user?id={student_tg})"
+        )
+    except Exception as e:
+        await message.answer(f"Ошибка при отправке оценки студенту: {str(e)}")
 
 
 @router.message(StateFilter(AssessLab), Command("cancel"))
@@ -545,9 +614,12 @@ async def send_lab_pdf(message: Message, state: FSMContext):
         await message.answer("Файл слишком большой (> 10 МБ)")
         return
 
-    dst = os.path.join(cfg.get_dir("labs"), f"lab_{lab_n}.pdf")
-    doc = await message.bot.download(doc, dst)
-    await message.answer(f"Материал ЛР № {lab_n} сохранён")
+    try:
+        dst = os.path.join(cfg.get_dir("labs"), f"lab_{lab_n}.pdf")
+        doc = await message.bot.download(doc, dst)
+        await message.answer(f"Материал ЛР № {lab_n} сохранён")
+    except Exception as e:
+        await message.answer(f"Ошибка при сохранении файла: {str(e)}")
 
 
 @router.callback_query(F.data == "labs:not_replace", AddLab.lab_exists)
@@ -599,12 +671,18 @@ async def students_progress(cb: CallbackQuery):
     excel_path = "progress.xlsx"
     progress.to_excel(excel_path, index=False)
     doc = FSInputFile(excel_path)
-    await cb.bot.send_document(
-        cb.message.chat.id, doc, caption="Успеваемость студентов"
-    )
 
-    await cb.message.delete()
     await cb.answer()
+
+    try:
+        await cb.bot.send_document(
+            cb.message.chat.id, doc, caption="Успеваемость студентов"
+        )
+        await cb.message.delete()
+    except Exception as e:
+        await cb.bot.send_message(
+            cb.message.chat.id, f"Ошибка при загрузке файла: {str(e)}"
+        )
 
 
 @router.callback_query(F.data == "students:list")

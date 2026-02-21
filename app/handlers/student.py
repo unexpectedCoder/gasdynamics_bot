@@ -153,7 +153,13 @@ async def get_homework_results_template(cb: CallbackQuery):
 @router.callback_query(F.data == "homework:template_file_code")
 async def get_homework_template_code(cb: CallbackQuery):
     await cb.answer()
-    await cb.bot.send_message(cb.message.chat.id, cfg.get_answer("help_json_code"))
+    settings = await rq.get_active_hw_settings()
+    code_key = (
+        "help_json_code_nozzle"
+        if settings and settings.hw_type == "nozzle"
+        else "help_json_code_wedge"
+    )
+    await cb.bot.send_message(cb.message.chat.id, cfg.get_answer(code_key))
 
 
 @router.callback_query(F.data == "homework:mark")
@@ -242,6 +248,8 @@ async def _check_json(message: Message, data: dict):
     sem = data["sem"]
     doc_dir = cfg.get_dir(f"sem_{sem}_json_to_check")
     doc_path = os.path.join(doc_dir, f"{message.from_user.id}.json")
+
+    await message.bot.download(data["send_file"], doc_path)
 
     work = data["work"]
     correct_variant = work.variant
@@ -396,8 +404,12 @@ async def labs(message: Message):
 @router.callback_query(F.data.regexp(r"^lab:\d{1,2}$"))
 async def labs_actions(cb: CallbackQuery):
     lab_i = int(cb.data.rsplit(":", 1)[-1])
+    s = await rq.get_student_by_tg(cb.from_user.id)
+    lab = await rq.get_lab_of(s, lab_i)
+    graded = bool(lab and lab.done)
     await cb.message.edit_text(
-        f"Выберите действие с ЛР № {lab_i} 👇", reply_markup=ikb.labs_action(lab_i)
+        f"Выберите действие с ЛР № {lab_i} 👇",
+        reply_markup=ikb.labs_action(lab_i, graded=graded),
     )
     await cb.answer()
 

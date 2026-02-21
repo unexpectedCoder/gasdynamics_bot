@@ -1,3 +1,4 @@
+import logging
 import threading
 from pathlib import Path
 
@@ -5,6 +6,8 @@ from pydantic import BaseModel, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.utils import file_ops
+
+logger = logging.getLogger(__name__)
 
 
 class Dirs(BaseModel):
@@ -88,15 +91,26 @@ async def init_runtime() -> RuntimeCache:
         return _runtime
 
     runtime = RuntimeCache()
+    logger.info(f"Initializing runtime. Running in Docker: {settings.in_docker}")
+
     for _key in settings.dirs.model_fields:
         _dir = get_dir(_key)
+        logger.debug(f"Creating directory: {_dir}")
         try:
             await file_ops.mkdir(_dir, parents=True, exist_ok=True)
+            logger.debug(f"Successfully created directory: {_dir}")
         except OSError as ex:
-            print(ex)
+            logger.error(f"Failed to create directory {_dir}: {ex}")
+            raise
 
-    runtime.bot_speech = await file_ops.read_json(get_file("bot_speech"))
-    runtime.answers = runtime.bot_speech.get("answers", {})
+    try:
+        runtime.bot_speech = await file_ops.read_json(get_file("bot_speech"))
+        runtime.answers = runtime.bot_speech.get("answers", {})
+        logger.info("Runtime cache initialized successfully")
+    except Exception as ex:
+        logger.error(f"Failed to initialize runtime cache: {ex}")
+        raise
+
     _runtime = runtime
     return runtime
 

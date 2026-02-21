@@ -31,13 +31,11 @@ def labwork(lab_numbers: list[int]):
     return builder.adjust(3).as_markup()
 
 
-def labs_action(lab_i: int):
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [IKB(text="Описание", callback_data=f"lab:description_{lab_i}")],
-            [IKB(text="Отправить отчёт", callback_data=f"lab:send_{lab_i}")],
-        ]
-    )
+def labs_action(lab_i: int, graded: bool = False):
+    rows = [[IKB(text="Описание", callback_data=f"lab:description_{lab_i}")]]
+    if not graded:
+        rows.append([IKB(text="Отправить отчёт", callback_data=f"lab:send_{lab_i}")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 examining = InlineKeyboardMarkup(
@@ -87,6 +85,17 @@ homework_choice = InlineKeyboardMarkup(
 )
 
 
+def homework_choice_active(hw_type: str) -> InlineKeyboardMarkup:
+    """Return a keyboard with only the currently active homework button."""
+    if hw_type == "nozzle":
+        label, sem = "№ 1", "1"
+    else:
+        label, sem = "№ 2", "2"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[[IKB(text=label, callback_data=f"homework:check_{sem}")]]
+    )
+
+
 homework_approve_or_remark = InlineKeyboardMarkup(
     inline_keyboard=[
         [
@@ -129,6 +138,13 @@ labs_approve_or_remark = InlineKeyboardMarkup(
         ]
     ]
 )
+
+
+def labs_check_choice(lab_numbers: list[int]):
+    builder = InlineKeyboardBuilder()
+    for i in lab_numbers:
+        builder.add(IKB(text=f"№ {i}", callback_data=f"labs:check_{i}"))
+    return builder.adjust(3).as_markup()
 
 
 def add_lab(lab_numbers: list[int]):

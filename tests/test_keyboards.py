@@ -226,6 +226,26 @@ class TestLabsAction:
         all_buttons = [btn for row in kb.inline_keyboard for btn in row]
         assert len(all_buttons) == 2
 
+    def test_graded_hides_send_button(self):
+        kb = labs_action(3, graded=True)
+        all_callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
+        assert "lab:send_3" not in all_callbacks
+
+    def test_graded_keeps_description_button(self):
+        kb = labs_action(3, graded=True)
+        all_callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
+        assert "lab:description_3" in all_callbacks
+
+    def test_graded_has_one_button(self):
+        kb = labs_action(1, graded=True)
+        all_buttons = [btn for row in kb.inline_keyboard for btn in row]
+        assert len(all_buttons) == 1
+
+    def test_not_graded_shows_send_button(self):
+        kb = labs_action(2, graded=False)
+        all_callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
+        assert "lab:send_2" in all_callbacks
+
 
 # ---------------------------------------------------------------------------
 # Static inline keyboards

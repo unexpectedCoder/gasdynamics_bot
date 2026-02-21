@@ -92,6 +92,7 @@ async def main() -> None:
     dp.include_routers(student_router, teacher_router, base_router)
 
     # Startup
+    await config.init_runtime()
     await async_main()
     if await rq.db_is_empty():
         await rq.fill_database()

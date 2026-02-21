@@ -15,11 +15,19 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+import config
+
 # ---------------------------------------------------------------------------
 # In-memory SQLite engine shared across DB tests
 # ---------------------------------------------------------------------------
 
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
+
+
+@pytest_asyncio.fixture(scope="session", autouse=True)
+async def init_runtime_fixture():
+    """Initialize runtime cache before running tests."""
+    await config.init_runtime()
 
 
 @pytest.fixture(scope="session")

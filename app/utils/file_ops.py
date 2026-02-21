@@ -15,10 +15,10 @@ async def listdir_names(path: str | Path) -> list[str]:
     return await asyncio.to_thread(lambda: [p.name for p in Path(path).iterdir()])
 
 
-async def listdir_names_by_mtime(path: str | Path, ascending: bool = True) -> list[str]:
+async def listdir_names_by_mtime(path: str | Path, reverse: bool = False) -> list[str]:
     def _list() -> list[str]:
         entries = list(Path(path).iterdir())
-        entries.sort(key=lambda p: p.stat().st_mtime, reverse=not ascending)
+        entries.sort(key=lambda p: p.stat().st_mtime, reverse=reverse)
         return [p.name for p in entries]
 
     return await asyncio.to_thread(_list)
