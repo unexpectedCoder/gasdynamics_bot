@@ -498,25 +498,43 @@ async def send_lab_cancel(message: Message, state: FSMContext):
 async def progress(message: Message):
     student = await rq.get_student_by_tg(message.from_user.id)
 
-    hw_nozzle = await rq.get_homework_of_type(student, "nozzle")
-    hw_wedge = await rq.get_homework_of_type(student, "shock_wedge")
+    answer = "*Успеваемость*\n\n"
 
-    answer = "Успеваемость:\n\n"
-
-    homeworks_text = ""
-    for label, work in [("ДЗ (сопло)", hw_nozzle), ("ДЗ (клин)", hw_wedge)]:
+    settings = await rq.get_active_hw_settings()
+    if settings is None:
+        homeworks_text = "ДЗ пока не открыто преподавателем\n"
+    else:
+        label = "ДЗ № 1" if settings.hw_type == "nozzle" else "ДЗ № 2"
+        work = await rq.get_homework_of_type(student, settings.hw_type)
         if not work or not work.done:
-            homeworks_text += f"- {label} *не сдано*\n"
+            homeworks_text = f"- {label} *не сдано*\n"
         else:
-            homeworks_text += f"- {label} - {work.points} баллов\n"
+            homeworks_text = f"- {label} - {work.points} баллов\n"
 
-    labs_text = ""
-    for i in range(1, 7):
-        lab = await rq.get_lab_of(student, i)
-        if not lab or not lab.done:
-            labs_text += f"- ЛР № {i} *не выполнена*\n"
-        else:
-            labs_text += f"- ЛР № {i} - {lab.points} баллов\n"
+    labs_dir = cfg.get_dir("labs")
+    try:
+        entries = await file_ops.listdir_names(labs_dir)
+    except OSError:
+        entries = []
+
+    lab_numbers = sorted(
+        [
+            int(f[4:-4])
+            for f in entries
+            if f.startswith("lab_") and f.endswith(".pdf") and f[4:-4].isdigit()
+        ]
+    )
+
+    if not lab_numbers:
+        labs_text = "Лабораторные работы пока не выданы преподавателем\n"
+    else:
+        labs_text = ""
+        for i in lab_numbers:
+            lab = await rq.get_lab_of(student, i)
+            if not lab or not lab.done:
+                labs_text += f"- ЛР № {i} *не выполнена*\n"
+            else:
+                labs_text += f"- ЛР № {i} - {lab.points} баллов\n"
 
     await message.answer(answer + homeworks_text + "\n" + labs_text)
 
