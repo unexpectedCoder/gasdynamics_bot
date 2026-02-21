@@ -369,6 +369,58 @@ async def get_free_active_homework(session: AsyncSession) -> AnyHomework | None:
     return await session.scalar(select(HW).where(HW.student_id.is_(None)))
 
 
+@connection
+async def duplicate_and_assign_active_homework(
+    session: AsyncSession, s: Student
+) -> AnyHomework | None:
+    """Duplicate a random existing homework variant and assign it to the student.
+
+    Called when no free (unassigned) records remain for the active homework type.
+    A new DB row is created by copying all task parameters from a randomly chosen
+    existing record. The new row gets variant = max(variant) + 1 so the uniqueness
+    of the variant column is preserved. The cloned row is immediately assigned to
+    the given student.
+
+    Returns the newly created homework object, or None if active settings are
+    missing or the homework table is completely empty.
+    """
+    settings = await _get_active_hw_settings(session)
+    if settings is None:
+        return None
+
+    HW = _get_hw_class(settings.hw_type)
+    all_hw = list(await session.scalars(select(HW)))
+    if not all_hw:
+        return None
+
+    source = rand.choice(all_hw)
+    new_variant = max(hw.variant for hw in all_hw) + 1
+
+    # Collect task-specific parameter columns (skip shared / status fields)
+    _skip = {
+        "id",
+        "student_id",
+        "variant",
+        "approved",
+        "approve_date",
+        "send",
+        "done",
+        "done_date",
+        "points",
+    }
+    params = {
+        attr.key: getattr(source, attr.key)
+        for attr in HW.__mapper__.column_attrs
+        if attr.key not in _skip
+    }
+
+    new_hw = HW(variant=new_variant, student_id=s.id, **params)
+    session.add(new_hw)
+    await session.commit()
+    await session.refresh(new_hw)
+    return new_hw
+
+
 # ---------------------------------------------------------------------------
 # Публичный API — Homework (teacher-facing / legacy, uses explicit sem)
 # ---------------------------------------------------------------------------

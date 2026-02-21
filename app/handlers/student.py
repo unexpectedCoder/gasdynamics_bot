@@ -58,17 +58,21 @@ async def get_homework(cb: CallbackQuery):
         return
 
     free = await rq.get_free_active_homework()
-    if not free:
-        await cb.message.edit_text(
-            "Свободных вариантов ДЗ не осталось, обратитесь к преподавателю..."
-        )
-        await cb.answer()
-        return
+    if free:
+        await rq.set_homework(student, free)
+        assigned = free
+    else:
+        assigned = await rq.duplicate_and_assign_active_homework(student)
+        if assigned is None:
+            await cb.message.edit_text(
+                "Не удалось выдать вариант ДЗ. Обратитесь к преподавателю."
+            )
+            await cb.answer()
+            return
 
-    await rq.set_homework(student, free)
     await cb.bot.send_message(
         cb.message.chat.id,
-        f"Ваше ДЗ:\n\n{str(free)}",
+        f"Ваше ДЗ:\n\n{str(assigned)}",
         reply_markup=ikb.homework_builder(False),
     )
 
