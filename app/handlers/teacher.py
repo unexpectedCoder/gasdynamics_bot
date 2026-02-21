@@ -14,6 +14,7 @@ import app.database.requests as rq
 import app.keyboards.inline as ikb
 import app.keyboards.keyboards as kb
 import config as cfg
+from app.database.models import HW_TYPE_NOZZLE, HW_TYPE_SHOCK_WEDGE
 from app.filters import IsTeacher
 from app.states import (
     AddLab,
@@ -654,19 +655,40 @@ async def students_progress(cb: CallbackQuery):
     def _rk(c_list, idx):
         return None if not c_list or len(c_list) <= idx else c_list[idx].points
 
-    progress = pd.DataFrame(
-        {
-            "ФИО": [s.get_name() for s in students],
-            "Группа": groups,
-            "РК 1": [_rk(c, 0) for c in controls],
-            "РК 2": [_rk(c, 1) for c in controls],
-            "РК 3": [_rk(c, 2) for c in controls],
-            "РК 4": [_rk(c, 3) for c in controls],
-            "ДЗ 1": hw_nozzle,
-            "ДЗ 2": hw_wedge,
-            **{f"ЛР № {i + 1}": lab_points[i] for i in range(6)},
-        }
-    ).sort_values(by=["Группа", "ФИО"])
+    # Determine which ДЗ columns to include (only if the hw type is currently active)
+    hw_settings_nozzle = await rq.get_hw_settings(HW_TYPE_NOZZLE)
+    hw_settings_wedge = await rq.get_hw_settings(HW_TYPE_SHOCK_WEDGE)
+    include_hw_nozzle = hw_settings_nozzle is not None and hw_settings_nozzle.available
+    include_hw_wedge = hw_settings_wedge is not None and hw_settings_wedge.available
+
+    # Determine which РК columns to include (only if at least one student has points)
+    rk_cols = {}
+    for idx in range(4):
+        col_values = [_rk(c, idx) for c in controls]
+        if any(v is not None for v in col_values):
+            rk_cols[f"РК {idx + 1}"] = col_values
+
+    # Determine which ЛР columns to include (only if the lab PDF was uploaded by teacher)
+    labs_dir = cfg.get_dir("labs")
+    try:
+        lab_entries = os.listdir(labs_dir)
+    except OSError:
+        lab_entries = []
+    lab_cols = {}
+    for i in range(6):
+        lab_n = i + 1
+        if f"lab_{lab_n}.pdf" in lab_entries:
+            lab_cols[f"ЛР № {lab_n}"] = lab_points[i]
+
+    data: dict = {"ФИО": [s.get_name() for s in students], "Группа": groups}
+    data.update(rk_cols)
+    if include_hw_nozzle:
+        data["ДЗ 1"] = hw_nozzle
+    if include_hw_wedge:
+        data["ДЗ 2"] = hw_wedge
+    data.update(lab_cols)
+
+    progress = pd.DataFrame(data).sort_values(by=["Группа", "ФИО"])
 
     excel_path = "progress.xlsx"
     progress.to_excel(excel_path, index=False)
